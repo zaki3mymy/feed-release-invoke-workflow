@@ -24,3 +24,8 @@ quote-style = "double"
 indent-style = "space"
 [tool.ruff.lint.isort]
 known-first-party = []
+
+# type-checker
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = []
