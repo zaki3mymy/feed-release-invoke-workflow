@@ -1,0 +1,27 @@
+{
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+  },
+  "code-eol.color": "#8e8e8e",
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "ruff.enable": true,
+  "ruff.configuration": "pyproject.toml",
+  "python.languageServer": "None",  # https://docs.astral.sh/ty/editors/#vs-code
+  "cSpell.words": [
+    "pyproject",
+    "ruff",
+    "pytest",
+    "autodocstring",
+    "isort",
+  ]
+}
