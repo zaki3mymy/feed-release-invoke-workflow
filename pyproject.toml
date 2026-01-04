@@ -29,6 +29,8 @@ ignore = [
     "D400",  # docstringの1行目にピリオド不要
     "D415",  # docstringの1行目にピリオド不要
     "INP001",  # Lambda関数に__init__.pyを作りたくないので
+    "S310",  # 外部からの入力がURLのスキームになることはないので除外
+    "TC003",  # 軽いスクリプトなので型チェックのみのimportもOK
 ]
 [tool.ruff.format]
 quote-style = "double"
