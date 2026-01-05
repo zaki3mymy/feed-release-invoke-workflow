@@ -5,6 +5,7 @@ import os
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http.client import HTTPResponse
@@ -35,13 +36,13 @@ class Release:
     updated: datetime
 
 
-def fetch_releases(repo: MonitoredRepo) -> HTTPResponse:
+def fetch_releases(repo: MonitoredRepo) -> Generator[HTTPResponse]:
     """GitHubリポジトリのリリース情報を取得する"""
     owner = repo.owner
     name = repo.name
     url = f"https://github.com/{owner}/{name}/releases.atom"
     with urllib.request.urlopen(url) as res:
-        return res
+        yield res
 
 
 def parse_atom_feed(res: HTTPResponse) -> Release | None:

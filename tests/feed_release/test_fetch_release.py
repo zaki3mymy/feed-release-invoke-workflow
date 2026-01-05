@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 import pook
 import pytest
 
-from feed_release.handler import fetch_releases, MonitoredRepo
+from feed_release.handler import MonitoredRepo, fetch_releases
 
 
 def test_正常にレスポンスが返ること() -> None:
@@ -22,10 +22,11 @@ def test_正常にレスポンスが返ること() -> None:
     with pook.api.context():
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=200, response_type="xml", response_body=exp_res)
-        act = fetch_releases(repo)
+        gen = fetch_releases(repo)
 
-    # verify
-    assert exp_res == act.read().decode("utf-8")
+        # verify
+        act = next(gen)
+        assert exp_res == act.read().decode("utf-8")
 
 
 def test_リポジトリが存在しないときにエラーとなること() -> None:
@@ -40,5 +41,5 @@ def test_リポジトリが存在しないときにエラーとなること() ->
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=404, response_type="xml", response_body=exp_res)
         with pytest.raises(HTTPError) as e:
-            fetch_releases(repo)
+            next(fetch_releases(repo))
         assert e.value.code == HTTPStatus.NOT_FOUND.value
