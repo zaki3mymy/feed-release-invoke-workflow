@@ -1,11 +1,12 @@
 """GitHubの最新リリースを購読し、更新があればGitHub Actionsを実行する"""
 
 import json
+import os
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from http.client import HTTPResponse
 
 
@@ -67,6 +68,13 @@ def parse_atom_feed(res: HTTPResponse) -> Release | None:
             return Release(release_id, datetime.fromisoformat(release_date))
 
     return None
+
+
+def is_latest_release(release: Release) -> bool:
+    """最新のリリースであるかどうかを判定する"""
+    interval = int(os.environ["INTERVAL_SECOND"])
+    now = datetime.now(tz=UTC)
+    return (now - timedelta(seconds=interval)) < release.updated
 
 
 def invoke_workflow(repo: TargetRepo, token: str) -> None:
