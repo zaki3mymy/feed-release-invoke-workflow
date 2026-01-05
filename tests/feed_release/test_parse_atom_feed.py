@@ -6,7 +6,7 @@
 # ruff: noqa: PLC2401, N802
 
 import io
-
+from datetime import datetime, timezone, timedelta
 from feed_release.handler import parse_atom_feed
 
 
@@ -46,7 +46,7 @@ def test_feedが1件():
   <updated>2025-12-19T04:08:17+09:00</updated>
   <entry>
     <id>{release_id}</id>
-    <updated>2025-12-19T04:37:41+09:00</updated>
+    <updated>2026-01-01T12:34:56+09:00</updated>
     <link rel="alternate" type="text/html" href="https://github.com/astral-sh/ruff/releases/tag/0.14.10"/>
     <title>0.1.0</title>
     <content type="html">&lt;h2&gt;Release Notes&lt;/h2&gt;</content>
@@ -62,7 +62,10 @@ def test_feedが1件():
     act = parse_atom_feed(res)  # ty:ignore[invalid-argument-type]
 
     # verify
-    assert release_id == act
+    assert act is not None
+    assert release_id == act.id
+    exp_dt = datetime(2026, 1, 1, 12, 34, 56, tzinfo=timezone(timedelta(hours=9)))
+    assert exp_dt == act.updated
 
 
 def test_feedが2件():
@@ -79,7 +82,7 @@ def test_feedが2件():
   <updated>2025-12-19T04:08:17+09:00</updated>
    <entry>
     <id>{release_id}</id>
-    <updated>2025-12-19T04:37:41+09:00</updated>
+    <updated>2026-01-01T12:34:56+09:00</updated>
     <link rel="alternate" type="text/html" href="https://github.com/astral-sh/ruff/releases/tag/0.14.10"/>
     <title>0.1.0</title>
     <content type="html">&lt;h2&gt;Release Notes&lt;/h2&gt;</content>
@@ -89,7 +92,7 @@ def test_feedが2件():
   </entry>
  <entry>
     <id>dummy-id</id>
-    <updated>2025-12-19T04:37:41+09:00</updated>
+    <updated>2026-01-01T12:34:56+09:00</updated>
     <link rel="alternate" type="text/html" href="https://github.com/astral-sh/ruff/releases/tag/0.14.10"/>
     <title>0.1.0</title>
     <content type="html">&lt;h2&gt;Release Notes&lt;/h2&gt;</content>
@@ -105,4 +108,7 @@ def test_feedが2件():
     act = parse_atom_feed(res)  # ty:ignore[invalid-argument-type]
 
     # verify
-    assert release_id == act
+    assert act is not None
+    assert release_id == act.id
+    exp_dt = datetime(2026, 1, 1, 12, 34, 56, tzinfo=timezone(timedelta(hours=9)))
+    assert exp_dt == act.updated

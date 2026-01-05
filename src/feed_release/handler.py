@@ -5,6 +5,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime
 from http.client import HTTPResponse
 
 
@@ -25,6 +26,14 @@ class TargetRepo:
     event_type: str
 
 
+@dataclass
+class Release:
+    """GitHubリポジトリのリリース情報"""
+
+    id: str
+    updated: datetime
+
+
 def fetch_releases(repo: MonitoredRepo) -> HTTPResponse:
     """GitHubリポジトリのリリース情報を取得する"""
     owner = repo.owner
@@ -34,11 +43,13 @@ def fetch_releases(repo: MonitoredRepo) -> HTTPResponse:
         return res
 
 
-def parse_atom_feed(res: HTTPResponse) -> str | None:
-    """リリース情報をパースする"""
+def parse_atom_feed(res: HTTPResponse) -> Release | None:
+    """リリース情報をパースして最新のリリース情報を取得する"""
     ns = "http://www.w3.org/2005/Atom"
     context = ET.iterparse(res, events=("start", "end"))  # noqa: S314 # ソースはgithub.comなので警告無視
     is_entry = False
+    release_id = None
+    release_date = None
     for event, elem in context:
         if event == "end":
             elem.clear()
@@ -48,7 +59,12 @@ def parse_atom_feed(res: HTTPResponse) -> str | None:
         if event == "start" and elem.tag == f"{{{ns}}}entry":
             is_entry = True
         elif is_entry and elem.tag == f"{{{ns}}}id":
-            return elem.text
+            release_id = elem.text
+        elif is_entry and elem.tag == f"{{{ns}}}updated":
+            release_date = elem.text
+
+        if release_id is not None and release_date is not None:
+            return Release(release_id, datetime.fromisoformat(release_date))
 
     return None
 
