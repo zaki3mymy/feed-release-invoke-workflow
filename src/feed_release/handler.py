@@ -4,12 +4,32 @@ import json
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from http.client import HTTPResponse
 
 
-def fetch_latest_release(owner: str, repo: str) -> HTTPResponse:
+@dataclass
+class MonitoredRepo:
+    """リリース監視対象のリポジトリ"""
+
+    owner: str
+    name: str
+
+
+@dataclass
+class TargetRepo:
+    """GitHub Actionsを実行するリポジトリ"""
+
+    owner: str
+    name: str
+    event_type: str
+
+
+def fetch_latest_release(repo: MonitoredRepo) -> HTTPResponse:
     """GitHubリポジトリのリリース情報を取得する"""
-    url = f"https://github.com/{owner}/{repo}/releases.atom"
+    owner = repo.owner
+    name = repo.name
+    url = f"https://github.com/{owner}/{name}/releases.atom"
     with urllib.request.urlopen(url) as res:
         return res
 
@@ -33,10 +53,13 @@ def parse_atom_feed(res: HTTPResponse) -> str | None:
     return None
 
 
-def invoke_workflow(owner: str, repo: str, event_type: str, token: str) -> None:
+def invoke_workflow(repo: TargetRepo, token: str) -> None:
     """GItHub Actionsを実行する"""
     # https://docs.github.com/ja/actions/reference/workflows-and-actions/events-that-trigger-workflows#repository_dispatch
-    url = f"https://api.github.com/repos/{owner}/{repo}/dispatches"
+    owner = repo.owner
+    name = repo.name
+    event_type = repo.event_type
+    url = f"https://api.github.com/repos/{owner}/{name}/dispatches"
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",

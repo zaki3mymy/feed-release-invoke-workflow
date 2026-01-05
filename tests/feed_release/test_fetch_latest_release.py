@@ -8,20 +8,21 @@ from urllib.error import HTTPError
 import pook
 import pytest
 
-from feed_release.handler import fetch_latest_release
+from feed_release.handler import fetch_latest_release, MonitoredRepo
 
 
 def test_正常にレスポンスが返ること() -> None:
     # prepare
     owner = "owner"
-    repo = "repo"
-    url = f"https://github.com/{owner}/{repo}/releases.atom"
+    name = "repo"
+    url = f"https://github.com/{owner}/{name}/releases.atom"
+    repo = MonitoredRepo(owner, name)
 
     # exec
     with pook.api.context():
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=200, response_type="xml", response_body=exp_res)
-        act = fetch_latest_release(owner, repo)
+        act = fetch_latest_release(repo)
 
     # verify
     assert exp_res == act.read().decode("utf-8")
@@ -30,13 +31,14 @@ def test_正常にレスポンスが返ること() -> None:
 def test_リポジトリが存在しないときにエラーとなること() -> None:
     # prepare
     owner = "owner"
-    repo = "non_exist"
-    url = f"https://github.com/{owner}/{repo}/releases.atom"
+    name = "non_exist"
+    url = f"https://github.com/{owner}/{name}/releases.atom"
+    repo = MonitoredRepo(owner, name)
 
     # exec
     with pook.api.context():
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=404, response_type="xml", response_body=exp_res)
         with pytest.raises(HTTPError) as e:
-            fetch_latest_release(owner, repo)
+            fetch_latest_release(repo)
         assert e.value.code == HTTPStatus.NOT_FOUND.value

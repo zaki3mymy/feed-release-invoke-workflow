@@ -9,16 +9,17 @@ from urllib.error import HTTPError
 import pook
 import pytest
 
-from feed_release.handler import invoke_workflow
+from feed_release.handler import invoke_workflow, TargetRepo
 
 
 def test_API呼び出し成功():
     # prepare
     owner = "owner"
-    repo = "repo"
+    name = "repo"
     event_type = "test-event"
     token = "test-token"  # noqa: S105
-    url = f"https://api.github.com/repos/{owner}/{repo}/dispatches"
+    url = f"https://api.github.com/repos/{owner}/{name}/dispatches"
+    repo = TargetRepo(owner, name, event_type)
 
     # exec / verify
     with pook.api.context():
@@ -33,16 +34,17 @@ def test_API呼び出し成功():
             )
             .reply(200)
         )
-        invoke_workflow(owner, repo, event_type, token)
+        invoke_workflow(repo, token)
 
 
 def test_API呼び出し権限なし():
     # prepare
     owner = "owner"
-    repo = "repo"
+    name = "repo"
     event_type = "test-event"
     token = "test-token"  # noqa: S105
-    url = f"https://api.github.com/repos/{owner}/{repo}/dispatches"
+    url = f"https://api.github.com/repos/{owner}/{name}/dispatches"
+    repo = TargetRepo(owner, name, event_type)
 
     # exec / verify
     with pook.api.context():
@@ -58,17 +60,18 @@ def test_API呼び出し権限なし():
             .reply(403)
         )
         with pytest.raises(HTTPError) as e:
-            invoke_workflow(owner, repo, event_type, token)
+            invoke_workflow(repo, token)
         assert e.value.code == HTTPStatus.FORBIDDEN.value
 
 
 def test_API呼び出し失敗():
     # prepare
     owner = "owner"
-    repo = "repo"
+    name = "repo"
     event_type = "test-event"
     token = "test-token"  # noqa: S105
-    url = f"https://api.github.com/repos/{owner}/{repo}/dispatches"
+    url = f"https://api.github.com/repos/{owner}/{name}/dispatches"
+    repo = TargetRepo(owner, name, event_type)
 
     # exec / verify
     with pook.api.context():
@@ -84,5 +87,5 @@ def test_API呼び出し失敗():
             .reply(500)
         )
         with pytest.raises(HTTPError) as e:
-            invoke_workflow(owner, repo, event_type, token)
+            invoke_workflow(repo, token)
         assert e.value.code == HTTPStatus.INTERNAL_SERVER_ERROR.value
