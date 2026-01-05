@@ -25,7 +25,7 @@ class TargetRepo:
     event_type: str
 
 
-def fetch_latest_release(repo: MonitoredRepo) -> HTTPResponse:
+def fetch_releases(repo: MonitoredRepo) -> HTTPResponse:
     """GitHubリポジトリのリリース情報を取得する"""
     owner = repo.owner
     name = repo.name
