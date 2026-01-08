@@ -22,11 +22,10 @@ def test_正常にレスポンスが返ること() -> None:
     with pook.api.context():
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=200, response_type="xml", response_body=exp_res)
-        gen = fetch_releases(repo)
+        res = fetch_releases(repo)
 
         # verify
-        act = next(gen)
-        assert exp_res == act.read().decode("utf-8")
+        assert exp_res == res.decode("utf-8")
 
 
 def test_リポジトリが存在しないときにエラーとなること() -> None:
@@ -41,5 +40,5 @@ def test_リポジトリが存在しないときにエラーとなること() ->
         exp_res = '<?xml version="1.0" encoding="UTF-8">'
         pook.get(url, reply=404, response_type="xml", response_body=exp_res)
         with pytest.raises(HTTPError) as e:
-            next(fetch_releases(repo))
+            fetch_releases(repo)
         assert e.value.code == HTTPStatus.NOT_FOUND.value

@@ -6,7 +6,8 @@
 # ruff: noqa: PLC2401, N802
 
 import io
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 from feed_release.handler import parse_atom_feed
 
 
@@ -23,10 +24,9 @@ def test_feedが0件():
   <updated>2025-12-19T04:08:17+09:00</updated>
 </feed>
 """
-    res = io.BytesIO(xml.encode("utf-8"))
 
     # exec
-    act = parse_atom_feed(res)  # ty:ignore[invalid-argument-type]
+    act = parse_atom_feed(xml)
 
     # verify
     assert act is None
@@ -56,10 +56,9 @@ def test_feedが1件():
   </entry>
 </feed>
 """
-    res = io.BytesIO(xml.encode("utf-8"))
 
     # exec
-    act = parse_atom_feed(res)  # ty:ignore[invalid-argument-type]
+    act = parse_atom_feed(xml)  # ty:ignore[invalid-argument-type]
 
     # verify
     assert act is not None
@@ -102,10 +101,9 @@ def test_feedが2件():
   </entry>
 </feed>
 """
-    res = io.BytesIO(xml.encode("utf-8"))
 
     # exec
-    act = parse_atom_feed(res)  # ty:ignore[invalid-argument-type]
+    act = parse_atom_feed(xml)  # ty:ignore[invalid-argument-type]
 
     # verify
     assert act is not None

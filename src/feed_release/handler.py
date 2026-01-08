@@ -5,10 +5,8 @@ import os
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from http.client import HTTPResponse
 
 
 @dataclass
@@ -36,29 +34,26 @@ class Release:
     updated: datetime
 
 
-def fetch_releases(repo: MonitoredRepo) -> Generator[HTTPResponse]:
+def fetch_releases(repo: MonitoredRepo) -> bytes:
     """GitHubリポジトリのリリース情報を取得する"""
     owner = repo.owner
     name = repo.name
     url = f"https://github.com/{owner}/{name}/releases.atom"
     with urllib.request.urlopen(url) as res:
-        yield res
+        return res.read()
 
 
-def parse_atom_feed(res: HTTPResponse) -> Release | None:
+def parse_atom_feed(xml: str) -> Release | None:
     """リリース情報をパースして最新のリリース情報を取得する"""
     ns = "http://www.w3.org/2005/Atom"
-    context = ET.iterparse(res, events=("start", "end"))  # noqa: S314 # ソースはgithub.comなので警告無視
+    parser = ET.XMLPullParser(["start", "end"])
+    parser.feed(xml)
     is_entry = False
     release_id = None
     release_date = None
-    for event, elem in context:
-        if event == "end":
-            elem.clear()
-            continue
-
+    for event, elem in parser.read_events():  # ty:ignore[invalid-assignment]
         # `{}`のエスケープがややこしい
-        if event == "start" and elem.tag == f"{{{ns}}}entry":
+        if event == "start" and elem.tag == f"{{{ns}}}entry":  # ty:ignore[possibly-missing-attribute]
             is_entry = True
         elif is_entry and elem.tag == f"{{{ns}}}id":
             release_id = elem.text
