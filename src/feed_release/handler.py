@@ -75,7 +75,7 @@ def is_latest_release(release: Release) -> bool:
 
 def invoke_workflow(repo: TargetRepo, token: str) -> None:
     """GItHub Actionsを実行する"""
-    # https://docs.github.com/ja/actions/reference/workflows-and-actions/events-that-trigger-workflows#repository_dispatch
+    # https://docs.github.com/ja/rest/actions/workflow-runs?apiVersion=2022-11-28
     owner = repo.owner
     name = repo.name
     event_type = repo.event_type
