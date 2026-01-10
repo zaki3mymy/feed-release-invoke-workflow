@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 import pook
 import pytest
 
-from feed_release.handler import invoke_workflow, TargetRepo
+from feed_release.handler import TargetRepo, invoke_workflow
 
 
 def test_API呼び出し成功():
