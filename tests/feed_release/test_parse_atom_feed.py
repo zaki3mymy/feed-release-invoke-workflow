@@ -5,7 +5,6 @@
 # ruff: noqa: E501
 # ruff: noqa: PLC2401, N802
 
-import io
 from datetime import datetime, timedelta, timezone
 
 from feed_release.handler import parse_atom_feed
