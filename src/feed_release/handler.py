@@ -1,12 +1,30 @@
 """GitHubの最新リリースを購読し、更新があればGitHub Actionsを実行する"""
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TypedDict
+
+logger = logging.getLogger()
+log_handler = logging.StreamHandler()
+log_handler.setLevel(logging.DEBUG)
+logger.addHandler(log_handler)
+logger.setLevel(logging.DEBUG)
+
+
+class Event(TypedDict):
+    """入力となるイベント"""
+
+    monitored_owner: str
+    monitored_repo: str
+    target_owner: str
+    target_repo: str
+    event_type: str
 
 
 @dataclass
@@ -100,3 +118,36 @@ def invoke_workflow(repo: TargetRepo, token: str) -> None:
             return res.read()
     except urllib.error.HTTPError:  # noqa: TRY203
         raise
+
+
+def main(monitored_repo: MonitoredRepo, target_repo: TargetRepo) -> None:
+    """GitHubのリリースを監視"""
+    # fetch
+    logger.info('fetch release: "%s/%s"', monitored_repo.owner, monitored_repo.name)
+    res = fetch_releases(monitored_repo)
+
+    # parse
+    release = parse_atom_feed(res)
+    logger.info(release)
+    if release is None:
+        # リリースが一つもない
+        logger.info("No release.")
+        return
+    if is_latest_release(release):
+        token = os.environ["GITHUB_TOKEN"]
+        invoke_workflow(target_repo, token)
+        logger.info(
+            'Invoke workflow: "%s/%s(%s)"',
+            target_repo.owner,
+            target_repo.name,
+            target_repo.event_type,
+        )
+    else:
+        logger.info("No latest release.")
+
+
+def lambda_function(event: Event, _) -> None:  # noqa: ANN001
+    """Lambda関数のエントリーポイント"""
+    m_repo = MonitoredRepo(event["monitored_owner"], event["monitored_repo"])
+    t_repo = TargetRepo(event["target_owner"], event["target_repo"], event["event_type"])
+    main(m_repo, t_repo)
