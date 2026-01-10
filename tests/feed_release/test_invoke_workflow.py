@@ -32,6 +32,12 @@ def test_API呼び出し成功():
                     "X-GitHub-Api-Version": "2022-11-28",
                 },
             )
+            .json(
+                {
+                    "event_type": event_type,
+                    "client_payload": {},
+                },
+            )
             .reply(200)
         )
         invoke_workflow(repo, token)
@@ -55,6 +61,12 @@ def test_API呼び出し権限なし():
                     "Accept": "application/vnd.github+json",
                     "Authorization": f"Bearer {token}",
                     "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            .json(
+                {
+                    "event_type": event_type,
+                    "client_payload": {},
                 },
             )
             .reply(403)
@@ -82,6 +94,12 @@ def test_API呼び出し失敗():
                     "Accept": "application/vnd.github+json",
                     "Authorization": f"Bearer {token}",
                     "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            .json(
+                {
+                    "event_type": event_type,
+                    "client_payload": {},
                 },
             )
             .reply(500)
