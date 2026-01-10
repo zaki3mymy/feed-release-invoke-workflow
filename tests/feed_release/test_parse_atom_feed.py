@@ -25,7 +25,7 @@ def test_feedが0件():
 """
 
     # exec
-    act = parse_atom_feed(xml)
+    act = parse_atom_feed(xml.encode("utf-8"))
 
     # verify
     assert act is None
@@ -57,7 +57,7 @@ def test_feedが1件():
 """
 
     # exec
-    act = parse_atom_feed(xml)  # ty:ignore[invalid-argument-type]
+    act = parse_atom_feed(xml.encode("utf-8"))
 
     # verify
     assert act is not None
@@ -102,7 +102,7 @@ def test_feedが2件():
 """
 
     # exec
-    act = parse_atom_feed(xml)  # ty:ignore[invalid-argument-type]
+    act = parse_atom_feed(xml.encode("utf-8"))
 
     # verify
     assert act is not None

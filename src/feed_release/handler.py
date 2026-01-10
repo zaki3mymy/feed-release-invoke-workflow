@@ -43,7 +43,7 @@ def fetch_releases(repo: MonitoredRepo) -> bytes:
         return res.read()
 
 
-def parse_atom_feed(xml: str) -> Release | None:
+def parse_atom_feed(xml: bytes) -> Release | None:
     """リリース情報をパースして最新のリリース情報を取得する"""
     ns = "http://www.w3.org/2005/Atom"
     parser = ET.XMLPullParser(["start", "end"])
