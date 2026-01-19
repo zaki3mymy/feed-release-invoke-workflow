@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'terraform/**'
+      - 'pyproject.toml'
+      - '.pre-commit-config.yaml'
+      - '.python-version'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'terraform/**'
+      - 'pyproject.toml'
+      - '.pre-commit-config.yaml'
+      - '.python-version'
+      - '.github/workflows/ci.yml'
+
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+    name: Lint and Format Check
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --dev
+
+    - name: Run ruff check
+      run: uv run ruff check src
+
+    - name: Run ruff format check
+      run: uv run ruff format --check src
+
+  type-check:
+    runs-on: ubuntu-latest
+    name: Type Check
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --dev
+
+    - name: Run ty check
+      run: uv run ty check
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --dev
+
+    - name: Run tests
+      run: uv run pytest --cov-report=html --cov-report=term
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: htmlcov/
+        retention-days: 30
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    name: Terraform Validation
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "~1.9.0"
+
+    - name: Terraform format check
+      run: terraform fmt -check -recursive terraform/
+
+    - name: Terraform validate (production)
+      run: |
+        cd terraform/environments/production
+        terraform init -backend=false
+        terraform validate
+
+    - name: TFLint
+      uses: reviewdog/action-tflint@v1
+      with:
+        github_token: ${{ secrets.github_token }}
+        working_directory: terraform/
+        tflint_version: "latest"
+        flags: "--recursive"
+
+    - name: Terraform Docs Check - Module
+      uses: terraform-docs/gh-actions@v1.4.1
+      with:
+        working-dir: terraform/modules/feed-release/
+        output-file: README.md
+        output-method: inject
+        git-push: "false"
+        fail-on-diff: "true"
+
+    - name: Terraform Docs Check - Production
+      uses: terraform-docs/gh-actions@v1.4.1
+      with:
+        working-dir: terraform/environments/production/
+        output-file: README.md
+        output-method: inject
+        git-push: "false"
+        fail-on-diff: "true"
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    name: Terraform Plan
+    if: github.event_name == 'pull_request'
+    needs: terraform-validate
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ap-northeast-1
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "~1.9.0"
+
+    - name: Terraform Plan
+      run: |
+        cd terraform/environments/production
+        terraform init \
+          -backend-config="bucket=${{ secrets.TERRAFORM_STATE_BUCKET }}" \
+          -backend-config="key=feed-release/terraform.tfstate" \
+          -backend-config="region=ap-northeast-1"
+        terraform plan \
+          -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}" \
+          -var='repositories=${{ secrets.REPOSITORIES_JSON }}'
