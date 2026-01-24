@@ -59,6 +59,9 @@ jobs:
     - name: Create dist directory
       run: mkdir -p dist
 
+    - name: Write repositories config
+      run: echo '${{ secrets.REPOSITORIES_JSON }}' > terraform/environments/production/repositories.json
+
     - name: Terraform Init
       run: |
         cd terraform/environments/production
@@ -72,18 +75,4 @@ jobs:
         cd terraform/environments/production
         terraform apply \
           -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}" \
-          -var='repositories=${{ secrets.REPOSITORIES_JSON }}' \
           -auto-approve
-
-    - name: Test Lambda deployment
-      run: |
-        aws lambda invoke \
-          --function-name feed-release \
-          --payload '{}' \
-          response.json
-        echo "Lambda response:"
-        cat response.json
-
-    - name: Cleanup
-      run: rm -f response.json
-      if: always()

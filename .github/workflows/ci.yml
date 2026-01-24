@@ -160,6 +160,9 @@ jobs:
       with:
         terraform_version: "~1.9.0"
 
+    - name: Write repositories config
+      run: echo '${{ secrets.REPOSITORIES_JSON }}' > terraform/environments/production/repositories.json
+
     - name: Terraform Plan
       run: |
         cd terraform/environments/production
@@ -168,5 +171,4 @@ jobs:
           -backend-config="key=feed-release/terraform.tfstate" \
           -backend-config="region=ap-northeast-1"
         terraform plan \
-          -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}" \
-          -var='repositories=${{ secrets.REPOSITORIES_JSON }}'
+          -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}"
