@@ -26,7 +26,7 @@ resource "aws_lambda_function" "feed_release" {
   filename      = var.lambda_zip_path
   function_name = var.lambda_function_name
   role          = aws_iam_role.lambda_role.arn
-  handler       = "feed_release.handler.lambda_function"
+  handler       = "handler.lambda_function"
   runtime       = "python3.13"
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
