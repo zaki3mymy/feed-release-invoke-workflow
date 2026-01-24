@@ -11,7 +11,7 @@ variable "interval_second" {
 }
 
 variable "repositories" {
-  description = "List of repositories to monitor for releases"
+  description = "List of repositories to monitor for releases. If not provided, reads from repositories.json"
   type = list(object({
     name            = string
     monitored_owner = string
@@ -20,6 +20,13 @@ variable "repositories" {
     target_repo     = string
     event_type      = string
   }))
+  default = null
+}
+
+variable "repositories_file" {
+  description = "Path to JSON file containing repository configurations"
+  type        = string
+  default     = "repositories.json"
 }
 
 variable "lambda_function_name" {
