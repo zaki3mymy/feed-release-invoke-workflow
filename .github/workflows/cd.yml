@@ -32,16 +32,16 @@ jobs:
     environment: ${{ github.event.inputs.environment || 'production' }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
       with:
         enable-cache: true
 
@@ -52,7 +52,7 @@ jobs:
       run: uv run pytest --cov-report=term
 
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: "~1.9.0"
 
@@ -76,3 +76,16 @@ jobs:
         terraform apply \
           -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}" \
           -auto-approve
+
+    - name: Test Lambda deployment
+      run: |
+        aws lambda invoke \
+          --function-name feed-release \
+          --payload '{}' \
+          response.json
+        echo "Lambda response:"
+        cat response.json
+
+    - name: Cleanup
+      run: rm -f response.json
+      if: always()
