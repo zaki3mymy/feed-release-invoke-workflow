@@ -78,13 +78,23 @@ jobs:
           -auto-approve
 
     - name: Test Lambda deployment
+      env:
+        REPOSITORIES_JSON: ${{ secrets.REPOSITORIES_JSON }}
       run: |
-        aws lambda invoke \
-          --function-name feed-release \
-          --payload '{}' \
-          response.json
-        echo "Lambda response:"
-        cat response.json
+        echo "$REPOSITORIES_JSON" | jq -c '.[]' | while read -r repo; do
+          name=$(echo "$repo" | jq -r '.name')
+          echo "Testing Lambda with repository: $name"
+
+          aws lambda invoke \
+            --function-name feed-release \
+            --payload "$repo" \
+            --cli-binary-format raw-in-base64-out \
+            response.json
+
+          echo "Response for $name:"
+          cat response.json
+          echo ""
+        done
 
     - name: Cleanup
       run: rm -f response.json
