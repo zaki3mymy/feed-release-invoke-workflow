@@ -247,7 +247,6 @@ environment {
 - CloudWatch Logsは14日間の保持期間を設定
 
 <!-- BEGIN_TF_DOCS -->
-
 ## Requirements
 
 | Name | Version |
@@ -260,7 +259,7 @@ environment {
 
 | Name | Version |
 |------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.7 |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | 2.7.1 |
 
 ## Modules
 
@@ -286,11 +285,12 @@ environment {
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
 | <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `30` | no |
 | <a name="input_output_zip_path"></a> [output\_zip\_path](#input\_output\_zip\_path) | Path where the Lambda deployment zip file will be created | `string` | `"../../../dist/lambda_function.zip"` | no |
-| <a name="input_repositories"></a> [repositories](#input\_repositories) | List of repositories to monitor for releases | `list(object({...}))` | n/a | yes |
+| <a name="input_repositories"></a> [repositories](#input\_repositories) | List of repositories to monitor for releases. If not provided, reads from repositories.json | <pre>list(object({<br/>    name            = string<br/>    monitored_owner = string<br/>    monitored_repo  = string<br/>    target_owner    = string<br/>    target_repo     = string<br/>    event_type      = string<br/>  }))</pre> | `null` | no |
+| <a name="input_repositories_file"></a> [repositories\_file](#input\_repositories\_file) | Path to JSON file containing repository configurations | `string` | `"repositories.json"` | no |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the AWS Resource Group | `string` | `"feed-release-resources"` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge schedule expression for checking releases | `string` | `"rate(1 hour)"` | no |
 | <a name="input_source_dir"></a> [source\_dir](#input\_source\_dir) | Path to the source directory containing Lambda function code | `string` | `"../../../src/feed_release"` | no |
-| <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{"Environment":"production","ManagedBy":"terraform","Project":"feed-release"}` | no |
+| <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | <pre>{<br/>  "Environment": "production",<br/>  "ManagedBy": "terraform",<br/>  "Project": "feed-release"<br/>}</pre> | no |
 
 ## Outputs
 
@@ -307,5 +307,4 @@ environment {
 | <a name="output_resource_group_arn"></a> [resource\_group\_arn](#output\_resource\_group\_arn) | ARN of the main resource group |
 | <a name="output_resource_group_name"></a> [resource\_group\_name](#output\_resource\_group\_name) | Name of the main resource group |
 | <a name="output_schedule_expression"></a> [schedule\_expression](#output\_schedule\_expression) | EventBridge schedule expression used |
-
 <!-- END_TF_DOCS -->
