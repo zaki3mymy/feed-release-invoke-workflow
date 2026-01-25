@@ -33,14 +33,18 @@ repos:
 
     -   id: terraform-docs-modules
         name: Check terraform docs(modules)
-        entry: terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md --output-check terraform/modules/feed-release/
+        entry: terraform-docs markdown table --output-check terraform/modules/feed-release/
+        args: [--indent=2, --output-mode=inject, --output-file=README.md]
         language: system
         files: ^terraform/modules/.*\.tf$
+        pass_filenames: false
 
     -   id: terraform-docs-environments
         name: Check terraform docs(environments)
-        entry: terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md --output-check terraform/environments/production/
+        entry: terraform-docs markdown table --output-check terraform/environments/production/
+        args: [--indent=2, --output-mode=inject, --output-file=README.md]
         language: system
         files: ^terraform/environments/production/.*\.tf$
+        pass_filenames: false
 
 default_install_hook_types: [pre-commit]
