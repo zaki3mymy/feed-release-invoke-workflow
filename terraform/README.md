@@ -46,10 +46,10 @@ terraform/
 
 ```bash
 # モジュール詳細ドキュメント生成
-terraform-docs markdown terraform/modules/feed-release/ > terraform/modules/feed-release/README.md
+terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md terraform/modules/feed-release/
 
 # 本番環境ドキュメント生成
-terraform-docs markdown terraform/environments/production/ > terraform/environments/production/README.md
+terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md terraform/environments/production/
 ```
 
 ## セキュリティ考慮事項

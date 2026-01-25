@@ -31,4 +31,16 @@ repos:
         language: system
         types: [text]
 
+    -   id: terraform-docs-modules
+        name: Check terraform docs(modules)
+        entry: terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md --output-check terraform/modules/feed-release/
+        language: system
+        files: ^terraform/modules/.*\.tf$
+
+    -   id: terraform-docs-environments
+        name: Check terraform docs(environments)
+        entry: terraform-docs markdown table --indent 2 --output-mode inject --output-file README.md --output-check terraform/environments/production/
+        language: system
+        files: ^terraform/environments/production/.*\.tf$
+
 default_install_hook_types: [pre-commit]
