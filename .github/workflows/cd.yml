@@ -93,9 +93,6 @@ jobs:
 
           echo "Response for $name:"
           cat response.json
+          rm -f response.json
           echo ""
         done
-
-    - name: Cleanup
-      run: rm -f response.json
-      if: always()
