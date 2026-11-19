@@ -6,7 +6,26 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = []
 
+# 監視するリポジトリの設定（S3）を追加・削除・一覧する CLI。`uv run feed-release ...` で呼ぶ
+# Lambda の zip は src/feed_release だけから作るので、CLI は zip に入らない
+[project.scripts]
+feed-release = "feed_release_cli.main:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["feed_release_cli*"]
+
+[tool.uv]
+default-groups = ["dev", "cli"]
+
 [dependency-groups]
+cli = [
+    "boto3>=1.44.6",
+]
 dev = [
     # Lambda は実行環境に入っている boto3 を使う（zip には入れない）。テストと型チェックのために入れる
     "boto3>=1.44.6",

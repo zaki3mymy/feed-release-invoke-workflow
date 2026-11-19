@@ -104,9 +104,12 @@ wheels = [
 [[package]]
 name = "feed-release"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 
 [package.dev-dependencies]
+cli = [
+    { name = "boto3" },
+]
 dev = [
     { name = "boto3" },
     { name = "freezegun" },
@@ -122,6 +125,7 @@ dev = [
 [package.metadata]
 
 [package.metadata.requires-dev]
+cli = [{ name = "boto3", specifier = ">=1.44.6" }]
 dev = [
     { name = "boto3", specifier = ">=1.44.6" },
     { name = "freezegun", specifier = ">=1.5.5" },
