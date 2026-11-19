@@ -104,6 +104,27 @@ resource "aws_s3_bucket_versioning" "config" {
   }
 }
 
+# 古いバージョンが溜まらないよう、新しいものから config_noncurrent_versions_to_keep 個だけ残す
+resource "aws_s3_bucket_lifecycle_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    id     = "keep-recent-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      # 最新でなくなってから 1 日たったバージョンのうち、新しい方から指定した数を残して消す
+      noncurrent_days           = 1
+      newer_noncurrent_versions = var.config_noncurrent_versions_to_keep
+    }
+  }
+
+  # バージョニングを有効にしてからルールを設定する
+  depends_on = [aws_s3_bucket_versioning.config]
+}
+
 resource "aws_s3_bucket_public_access_block" "config" {
   bucket = aws_s3_bucket.config.id
 

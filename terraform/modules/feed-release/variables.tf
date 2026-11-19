@@ -33,6 +33,12 @@ variable "config_bucket_name" {
   default     = "prod-feed-release-invoke-workflow"
 }
 
+variable "config_noncurrent_versions_to_keep" {
+  description = "Number of noncurrent versions of the repositories config to keep in the S3 bucket"
+  type        = number
+  default     = 10
+}
+
 variable "lambda_function_name" {
   description = "Name of the Lambda function"
   type        = string
