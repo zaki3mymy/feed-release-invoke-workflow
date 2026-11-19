@@ -44,8 +44,6 @@ RUFF_ENTRY = Entry(
 
 @pytest.fixture
 def s3_stub(monkeypatch: pytest.MonkeyPatch) -> Iterator[Stubber]:
-    monkeypatch.setenv("CONFIG_BUCKET", BUCKET)
-    monkeypatch.setenv("CONFIG_KEY", KEY)
     client = boto3.client(
         "s3",
         region_name="ap-northeast-1",
@@ -66,21 +64,21 @@ def test_S3の設定を読むこと(s3_stub: Stubber):
         {"Bucket": BUCKET, "Key": KEY},
     )
 
-    assert load_entries() == [RUFF_ENTRY]
+    assert load_entries(BUCKET, KEY) == [RUFF_ENTRY]
 
 
 def test_設定が無いときは分かるメッセージでエラーにすること(s3_stub: Stubber):
     s3_stub.add_client_error("get_object", service_error_code="NoSuchKey", http_status_code=404)
 
     with pytest.raises(ConfigError, match=f"設定 {LOCATION} がありません"):
-        load_entries()
+        load_entries(BUCKET, KEY)
 
 
 def test_S3のそのほかのエラーはそのまま投げること(s3_stub: Stubber):
     s3_stub.add_client_error("get_object", service_error_code="AccessDenied", http_status_code=403)
 
     with pytest.raises(ClientError):
-        load_entries()
+        load_entries(BUCKET, KEY)
 
 
 @pytest.mark.parametrize(

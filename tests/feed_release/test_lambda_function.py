@@ -49,6 +49,8 @@ OLD = "2026-01-01T12:35:57+09:00"
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("INTERVAL_SECOND", "60")
+    monkeypatch.setenv("CONFIG_BUCKET", "test-bucket")
+    monkeypatch.setenv("CONFIG_KEY", "repositories.json")
     # SSM には取りに行かず、決まったトークンを返す
     monkeypatch.setattr(handler, "get_github_token", lambda: TOKEN)
 
@@ -188,7 +190,13 @@ def test_dispatchに失敗しても残りは続けて最後にエラーにする
 def test_lambda_functionは設定を読んで全エントリーを処理すること(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(handler, "load_entries", lambda: [entry("a", "m/repo", "t/repo")])
+    loaded: list[tuple[str, str]] = []
+
+    def _load_entries(bucket: str, key: str) -> list[Entry]:
+        loaded.append((bucket, key))
+        return [entry("a", "m/repo", "t/repo")]
+
+    monkeypatch.setattr(handler, "load_entries", _load_entries)
     with pook.api.context():
         mock_feed("m/repo", RELEASE_XML)
         dispatch = mock_dispatch("t/repo")
@@ -197,6 +205,7 @@ def test_lambda_functionは設定を読んで全エントリーを処理する�
         event: Any = {"source": "aws.events", "detail-type": "Scheduled Event", "detail": {}}
         result = lambda_function(event, None)
 
+        assert loaded == [("test-bucket", "repositories.json")]
         assert dispatch.calls == 1
         assert result["dispatched"] == ["a"]
 
@@ -211,8 +220,24 @@ def test_lambda_functionはdry_runがtrueのときだけdry_runにすること(
     *,
     dry_run: bool,
 ):
-    monkeypatch.setattr(handler, "load_entries", list)
+    monkeypatch.setattr(handler, "load_entries", lambda _bucket, _key: [])
 
     result = lambda_function(event, None)
 
     assert result["dry_run"] is dry_run
+
+
+@pytest.mark.parametrize("name", ["CONFIG_BUCKET", "CONFIG_KEY"])
+def test_lambda_functionは設定の場所の環境変数が無いときは設定を読む前にエラーにすること(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+):
+    def _load_entries(_bucket: str, _key: str) -> list[Entry]:
+        msg = "設定を読みに行かない"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(handler, "load_entries", _load_entries)
+    monkeypatch.delenv(name)
+
+    with pytest.raises(KeyError, match=name):
+        lambda_function({}, None)
