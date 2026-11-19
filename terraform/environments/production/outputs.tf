@@ -18,6 +18,16 @@ output "eventbridge_rule_arns" {
   value       = module.feed_release.eventbridge_rule_arns
 }
 
+output "config_bucket_name" {
+  description = "Name of the S3 bucket that holds the repositories config"
+  value       = module.feed_release.config_bucket_name
+}
+
+output "config_bucket_arn" {
+  description = "ARN of the S3 bucket that holds the repositories config"
+  value       = module.feed_release.config_bucket_arn
+}
+
 output "schedule_expression" {
   description = "EventBridge schedule expression used"
   value       = module.feed_release.schedule_expression

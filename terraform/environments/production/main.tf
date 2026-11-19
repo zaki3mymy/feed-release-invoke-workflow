@@ -25,6 +25,9 @@ module "feed_release" {
   # Repositories to monitor (from JSON file or variable)
   repositories = local.repositories
 
+  # Repositories config (S3)
+  config_bucket_name = var.config_bucket_name
+
   # Lambda configuration
   lambda_function_name    = var.lambda_function_name
   lambda_zip_path         = data.archive_file.lambda_zip.output_path

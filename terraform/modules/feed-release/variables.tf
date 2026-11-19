@@ -27,6 +27,12 @@ variable "repositories" {
   }))
 }
 
+variable "config_bucket_name" {
+  description = "Name of the S3 bucket that holds the repositories config"
+  type        = string
+  default     = "prod-feed-release-invoke-workflow"
+}
+
 variable "lambda_function_name" {
   description = "Name of the Lambda function"
   type        = string
