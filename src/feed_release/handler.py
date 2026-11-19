@@ -307,7 +307,6 @@ def lambda_function(event: Mapping[str, object] | None, _) -> dict[str, object]:
     EventBridge のスケジュールからは決まった形のイベントが来るが、使うのは dry_run だけ。
     {"dry_run": true} のときは、設定の読み込み・フィードの取得・dispatch するかの判断までを行う
     """
-    # 設定の場所は、処理を始める前に環境変数から読んでおく(無ければここで KeyError になる)
     bucket = os.environ["CONFIG_BUCKET"]
     key = os.environ["CONFIG_KEY"]
     dry_run = isinstance(event, dict) and event.get("dry_run") is True
