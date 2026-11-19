@@ -18,7 +18,6 @@ module "feed_release" {
   source = "./modules/feed-release"
 
   # 必須変数
-  github_token            = var.github_token
   lambda_zip_path         = var.lambda_zip_path
   lambda_source_code_hash = var.lambda_source_code_hash
 
@@ -131,7 +130,7 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | CloudWatch log retention period in days | `number` | `14` | no |
 | <a name="input_create_comprehensive_resource_group"></a> [create\_comprehensive\_resource\_group](#input\_create\_comprehensive\_resource\_group) | Whether to create a comprehensive resource group that includes all AWS resources | `bool` | `false` | no |
-| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | GitHub API token for triggering workflow dispatch | `string` | n/a | yes |
+| <a name="input_github_token_parameter_name"></a> [github\_token\_parameter\_name](#input\_github\_token\_parameter\_name) | Name of the SSM parameter (SecureString) holding the GitHub API token for triggering workflow dispatch | `string` | `"/app/feed-release-invoke-workflow/gh-token-for-dispatch"` | no |
 | <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
@@ -162,8 +161,8 @@ No modules.
 
 ## セキュリティ
 
-- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込み権限のみ
-- **Sensitive変数**: `github_token`は`sensitive = true`でマーク
+- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込みと、GitHubのトークンのSSMパラメータの読み取り（`ssm:GetParameter`）のみ
+- **GitHubのトークン**: 値はTerraformにもLambdaの環境変数にも渡さない。SSM Parameter Store（SecureString）に置き、Lambdaが実行時に取得する（`github_token_parameter_name`）
 - **VPC**: 不要なVPC設定は省略し、シンプルな構成を維持
 
 ## 監視とトラブルシューティング
@@ -203,6 +202,6 @@ aws resource-groups list-group-resources --group-name feed-release-resources
 モジュールの開発・テスト時は、以下の環境変数を設定してください：
 
 ```bash
-export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+export GITHUB_TOKEN_PARAMETER_NAME="/app/feed-release-invoke-workflow/gh-token-for-dispatch"
 export INTERVAL_SECOND="3600"
 ```

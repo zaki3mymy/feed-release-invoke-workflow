@@ -172,5 +172,4 @@ jobs:
           -backend-config="bucket=${{ secrets.TERRAFORM_STATE_BUCKET }}" \
           -backend-config="key=feed-release/terraform.tfstate" \
           -backend-config="region=ap-northeast-1"
-        terraform plan \
-          -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}"
+        terraform plan

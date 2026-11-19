@@ -20,7 +20,6 @@ module "feed_release" {
   source = "../../modules/feed-release"
 
   # GitHub configuration
-  github_token    = var.github_token
   interval_second = var.interval_second
 
   # Repositories to monitor (from JSON file or variable)

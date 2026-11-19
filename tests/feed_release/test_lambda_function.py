@@ -8,13 +8,15 @@ import pook
 import pytest
 from freezegun import freeze_time
 
+from feed_release import handler
 from feed_release.handler import Event, lambda_function
 
 
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("INTERVAL_SECOND", "60")
-    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    # SSM には取りに行かず、決まったトークンを返す
+    monkeypatch.setattr(handler, "get_github_token", lambda: "test-token")
 
 
 @freeze_time("2026-01-01T12:35:56+09:00")

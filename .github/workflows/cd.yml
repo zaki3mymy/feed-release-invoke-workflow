@@ -73,9 +73,7 @@ jobs:
     - name: Terraform Apply
       run: |
         cd terraform/environments/production
-        terraform apply \
-          -var="github_token=${{ secrets.GH_TOKEN_FOR_DISPATCH }}" \
-          -auto-approve
+        terraform apply -auto-approve
 
     - name: Test Lambda deployment
       env:
