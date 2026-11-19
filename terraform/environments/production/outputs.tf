@@ -8,14 +8,19 @@ output "lambda_function_arn" {
   value       = module.feed_release.lambda_function_arn
 }
 
-output "eventbridge_rule_names" {
-  description = "Names of the EventBridge rules"
-  value       = module.feed_release.eventbridge_rule_names
+output "eventbridge_rule_name" {
+  description = "Name of the EventBridge rule"
+  value       = module.feed_release.eventbridge_rule_name
 }
 
-output "eventbridge_rule_arns" {
-  description = "ARNs of the EventBridge rules"
-  value       = module.feed_release.eventbridge_rule_arns
+output "eventbridge_rule_arn" {
+  description = "ARN of the EventBridge rule"
+  value       = module.feed_release.eventbridge_rule_arn
+}
+
+output "config_object_key" {
+  description = "Key of the repositories config (JSON) in the S3 bucket"
+  value       = module.feed_release.config_object_key
 }
 
 output "config_bucket_name" {

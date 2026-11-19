@@ -8,14 +8,19 @@ output "lambda_function_arn" {
   value       = aws_lambda_function.feed_release.arn
 }
 
-output "eventbridge_rule_names" {
-  description = "Names of the EventBridge rules"
-  value       = { for k, v in aws_cloudwatch_event_rule.release_monitor : k => v.name }
+output "eventbridge_rule_name" {
+  description = "Name of the EventBridge rule"
+  value       = aws_cloudwatch_event_rule.schedule.name
 }
 
-output "eventbridge_rule_arns" {
-  description = "ARNs of the EventBridge rules"
-  value       = { for k, v in aws_cloudwatch_event_rule.release_monitor : k => v.arn }
+output "eventbridge_rule_arn" {
+  description = "ARN of the EventBridge rule"
+  value       = aws_cloudwatch_event_rule.schedule.arn
+}
+
+output "config_object_key" {
+  description = "Key of the repositories config (JSON) in the S3 bucket"
+  value       = var.config_object_key
 }
 
 output "config_bucket_name" {

@@ -4,25 +4,6 @@ variable "interval_second" {
   default     = 3600
 }
 
-variable "repositories" {
-  description = "List of repositories to monitor for releases. If not provided, reads from repositories.json"
-  type = list(object({
-    name            = string
-    monitored_owner = string
-    monitored_repo  = string
-    target_owner    = string
-    target_repo     = string
-    event_type      = string
-  }))
-  default = null
-}
-
-variable "repositories_file" {
-  description = "Path to JSON file containing repository configurations"
-  type        = string
-  default     = "repositories.json"
-}
-
 variable "config_bucket_name" {
   description = "Name of the S3 bucket that holds the repositories config"
   type        = string
@@ -44,7 +25,7 @@ variable "schedule_expression" {
 variable "lambda_timeout" {
   description = "Lambda function timeout in seconds"
   type        = number
-  default     = 30
+  default     = 60
 }
 
 variable "lambda_memory_size" {

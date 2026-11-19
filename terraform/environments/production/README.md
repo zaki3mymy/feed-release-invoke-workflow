@@ -41,26 +41,6 @@ aws s3api put-bucket-encryption \
 # リリース判定設定
 interval_second = 3600  # 1時間以内のリリースを「最新」と判定
 
-# 監視対象リポジトリ
-repositories = [
-  {
-    name            = "claude-code"
-    monitored_owner = "anthropics"
-    monitored_repo  = "claude-code"
-    target_owner    = "my-org"
-    target_repo     = "my-app"
-    event_type      = "claude-code-release"
-  },
-  {
-    name            = "terraform"
-    monitored_owner = "hashicorp"
-    monitored_repo  = "terraform"
-    target_owner    = "my-org"
-    target_repo     = "infra"
-    event_type      = "terraform-release"
-  }
-]
-
 # Lambda設定
 lambda_function_name = "feed-release"
 
@@ -108,11 +88,14 @@ aws ssm put-parameter --region ap-northeast-1 \
   --value "ghp_xxxxxxxxxxxx" --overwrite
 ```
 
-### repositories 変数の構造
+### 監視するリポジトリの設定
+
+監視するリポジトリは Terraform では持たず、S3 の `s3://prod-feed-release-invoke-workflow/repositories.json` に置きます。
+Lambda が実行のたびに読むので、書き換えれば次の実行から反映されます。追加・削除・一覧はリポジトリのルートの `README.md` にある `feed-release` コマンドで行います。
 
 | フィールド | 説明 |
 |------------|------|
-| `name` | 識別名（EventBridgeルール名に使用） |
+| `name` | 識別名（重複不可） |
 | `monitored_owner` | 監視対象リポジトリのオーナー |
 | `monitored_repo` | 監視対象リポジトリ名 |
 | `target_owner` | ワークフロー実行先のオーナー |
@@ -130,17 +113,17 @@ terraform output
 # Lambda関数の確認
 aws lambda get-function --function-name feed-release
 
-# EventBridgeルールの確認
+# EventBridgeルールの確認（ルールは1つ）
 aws events list-rules --name-prefix feed-release
 ```
 
 ### 動作テスト
 
 ```bash
-# Lambda関数の手動実行（特定リポジトリ）
+# Lambda関数の dry run（設定の読み込み・フィードの取得・dispatch するかの判断までを行い、dispatch はしない）
 aws lambda invoke \
   --function-name feed-release \
-  --payload '{"monitored_owner":"anthropics","monitored_repo":"claude-code","target_owner":"my-org","target_repo":"my-app","event_type":"claude-code-release"}' \
+  --payload '{"dry_run": true}' --cli-binary-format raw-in-base64-out \
   response.json
 
 # レスポンス確認
@@ -184,20 +167,13 @@ terraform apply
 
 ### 監視対象リポジトリの追加
 
-`terraform.tfvars`の`repositories`リストに新しいエントリを追加してください：
+`feed-release` コマンドで S3 の設定に追加してください（Terraform の実行は不要です）：
 
-```hcl
-repositories = [
-  # 既存のエントリ...
-  {
-    name            = "new-repo"
-    monitored_owner = "owner"
-    monitored_repo  = "repo-name"
-    target_owner    = "my-org"
-    target_repo     = "my-app"
-    event_type      = "new-repo-release"
-  }
-]
+```bash
+uv run feed-release add new-repo \
+  --monitor owner/repo-name \
+  --target my-org/my-app \
+  --event new-repo-release
 ```
 
 ### 実行スケジュールの変更
@@ -219,6 +195,7 @@ schedule_expression = "cron(0 0 * * ? *)"  # UTC 00:00 = JST 09:00
 1. **Lambda関数が実行されない**
    - EventBridgeルールが有効か確認
    - IAMロールの権限を確認
+   - S3 の設定（`repositories.json`）があり、JSON が壊れていないか確認（`uv run feed-release list`）
 
 2. **GitHub API エラー**
    - SSM パラメータのGitHub Tokenが正しいか確認
@@ -286,10 +263,8 @@ environment {
 | <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
-| <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `30` | no |
+| <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `60` | no |
 | <a name="input_output_zip_path"></a> [output\_zip\_path](#input\_output\_zip\_path) | Path where the Lambda deployment zip file will be created | `string` | `"../../../dist/lambda_function.zip"` | no |
-| <a name="input_repositories"></a> [repositories](#input\_repositories) | List of repositories to monitor for releases. If not provided, reads from repositories.json | <pre>list(object({<br/>    name            = string<br/>    monitored_owner = string<br/>    monitored_repo  = string<br/>    target_owner    = string<br/>    target_repo     = string<br/>    event_type      = string<br/>  }))</pre> | `null` | no |
-| <a name="input_repositories_file"></a> [repositories\_file](#input\_repositories\_file) | Path to JSON file containing repository configurations | `string` | `"repositories.json"` | no |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the AWS Resource Group | `string` | `"feed-release-resources"` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge schedule expression for checking releases | `string` | `"rate(1 hour)"` | no |
 | <a name="input_source_dir"></a> [source\_dir](#input\_source\_dir) | Path to the source directory containing Lambda function code | `string` | `"../../../src/feed_release"` | no |
@@ -304,8 +279,9 @@ environment {
 | <a name="output_comprehensive_resource_group_name"></a> [comprehensive\_resource\_group\_name](#output\_comprehensive\_resource\_group\_name) | Name of the comprehensive resource group (if created) |
 | <a name="output_config_bucket_arn"></a> [config\_bucket\_arn](#output\_config\_bucket\_arn) | ARN of the S3 bucket that holds the repositories config |
 | <a name="output_config_bucket_name"></a> [config\_bucket\_name](#output\_config\_bucket\_name) | Name of the S3 bucket that holds the repositories config |
-| <a name="output_eventbridge_rule_arns"></a> [eventbridge\_rule\_arns](#output\_eventbridge\_rule\_arns) | ARNs of the EventBridge rules |
-| <a name="output_eventbridge_rule_names"></a> [eventbridge\_rule\_names](#output\_eventbridge\_rule\_names) | Names of the EventBridge rules |
+| <a name="output_config_object_key"></a> [config\_object\_key](#output\_config\_object\_key) | Key of the repositories config (JSON) in the S3 bucket |
+| <a name="output_eventbridge_rule_arn"></a> [eventbridge\_rule\_arn](#output\_eventbridge\_rule\_arn) | ARN of the EventBridge rule |
+| <a name="output_eventbridge_rule_name"></a> [eventbridge\_rule\_name](#output\_eventbridge\_rule\_name) | Name of the EventBridge rule |
 | <a name="output_iam_role_arn"></a> [iam\_role\_arn](#output\_iam\_role\_arn) | ARN of the IAM role used by Lambda |
 | <a name="output_lambda_function_arn"></a> [lambda\_function\_arn](#output\_lambda\_function\_arn) | ARN of the Lambda function |
 | <a name="output_lambda_function_name"></a> [lambda\_function\_name](#output\_lambda\_function\_name) | Name of the Lambda function |

@@ -4,8 +4,9 @@
 
 ## 機能
 
-- **自動スケジュール実行**: EventBridgeで1時間ごとに実行
-- **複数リポジトリ監視**: `for_each`を使用して複数のリポジトリを同時監視
+- **自動スケジュール実行**: EventBridgeで1時間ごとに実行（ルールは1つ）
+- **複数リポジトリ監視**: 監視するリポジトリの設定をS3のJSONに置き、Lambdaが実行のたびに読む。設定を書き換えれば次の実行から反映される（Terraformの実行は不要）
+- **並列処理**: リポジトリごとのフィード取得とdispatchをスレッドで並列に行う。同じリポジトリを監視するエントリーはフィード取得を1回にまとめる
 - **GitHub API統合**: Repository Dispatch APIでワークフローをトリガー
 - **セキュリティ考慮**: 最小権限IAMロールとsensitive変数保護
 - **リソース管理**: AWS Resource Groupsによる一元管理
@@ -21,31 +22,14 @@ module "feed_release" {
   lambda_zip_path         = var.lambda_zip_path
   lambda_source_code_hash = var.lambda_source_code_hash
 
-  # 監視対象リポジトリ
-  repositories = [
-    {
-      name            = "claude-code"
-      monitored_owner = "anthropics"
-      monitored_repo  = "claude-code"
-      target_owner    = "my-org"
-      target_repo     = "my-app"
-      event_type      = "claude-code-release"
-    },
-    {
-      name            = "terraform"
-      monitored_owner = "hashicorp"
-      monitored_repo  = "terraform"
-      target_owner    = "my-org"
-      target_repo     = "infra"
-      event_type      = "terraform-release"
-    }
-  ]
+  # 監視するリポジトリの設定を置く S3 バケット（設定の中身は feed-release CLI で管理する）
+  config_bucket_name = "prod-feed-release-invoke-workflow"
 
   # オプション変数
   lambda_function_name = "feed-release"
   schedule_expression  = "rate(1 hour)"
   interval_second      = 3600
-  lambda_timeout       = 30
+  lambda_timeout       = 60
   lambda_memory_size   = 128
 
   tags = {
@@ -62,22 +46,28 @@ module "feed_release" {
 sequenceDiagram
     participant EB as EventBridge
     participant LF as Lambda Function
+    participant S3 as S3 (repositories.json)
     participant GH as GitHub Atom Feed
     participant GA as GitHub Actions
     participant CW as CloudWatch Logs
     participant IAM as IAM Role
 
     Note over EB: 1時間ごと
-    EB->>+LF: トリガー実行（リポジトリ情報付き）
+    EB->>+LF: トリガー実行
 
     LF->>+IAM: 権限確認
-    IAM-->>-LF: CloudWatch Logs権限付与
+    IAM-->>-LF: CloudWatch Logs・S3・SSM権限付与
 
+    LF->>+S3: 監視するリポジトリの設定を取得
+    S3-->>-LF: エントリーの一覧
+
+    Note over LF: 監視するリポジトリごとに並列で
     LF->>+GH: Atomフィード取得
     Note over GH: /releases.atom
     GH-->>-LF: リリース情報レスポンス
 
     alt 新しいリリースが存在（INTERVAL_SECOND以内）
+        Note over LF: そのリポジトリを監視する全エントリーに
         LF->>+GA: Repository Dispatch API
         Note over GA: ワークフロートリガー
         GA-->>-LF: 実行完了レスポンス
@@ -111,7 +101,7 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [aws_cloudwatch_event_rule.release_monitor](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
+| [aws_cloudwatch_event_rule.schedule](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.lambda_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_cloudwatch_log_group.lambda_log_group](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_iam_role.lambda_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
@@ -135,15 +125,15 @@ No modules.
 | <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | CloudWatch log retention period in days | `number` | `14` | no |
 | <a name="input_config_bucket_name"></a> [config\_bucket\_name](#input\_config\_bucket\_name) | Name of the S3 bucket that holds the repositories config | `string` | `"prod-feed-release-invoke-workflow"` | no |
 | <a name="input_config_noncurrent_versions_to_keep"></a> [config\_noncurrent\_versions\_to\_keep](#input\_config\_noncurrent\_versions\_to\_keep) | Number of noncurrent versions of the repositories config to keep in the S3 bucket | `number` | `10` | no |
+| <a name="input_config_object_key"></a> [config\_object\_key](#input\_config\_object\_key) | Key of the repositories config (JSON) in the S3 bucket | `string` | `"repositories.json"` | no |
 | <a name="input_create_comprehensive_resource_group"></a> [create\_comprehensive\_resource\_group](#input\_create\_comprehensive\_resource\_group) | Whether to create a comprehensive resource group that includes all AWS resources | `bool` | `false` | no |
 | <a name="input_github_token_parameter_name"></a> [github\_token\_parameter\_name](#input\_github\_token\_parameter\_name) | Name of the SSM parameter (SecureString) holding the GitHub API token for triggering workflow dispatch | `string` | `"/app/feed-release-invoke-workflow/gh-token-for-dispatch"` | no |
 | <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
 | <a name="input_lambda_source_code_hash"></a> [lambda\_source\_code\_hash](#input\_lambda\_source\_code\_hash) | Base64 encoded hash of the Lambda zip file | `string` | n/a | yes |
-| <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `30` | no |
+| <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `60` | no |
 | <a name="input_lambda_zip_path"></a> [lambda\_zip\_path](#input\_lambda\_zip\_path) | Path to the Lambda deployment zip file | `string` | n/a | yes |
-| <a name="input_repositories"></a> [repositories](#input\_repositories) | List of repositories to monitor for releases | <pre>list(object({<br/>    name            = string<br/>    monitored_owner = string<br/>    monitored_repo  = string<br/>    target_owner    = string<br/>    target_repo     = string<br/>    event_type      = string<br/>  }))</pre> | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the AWS Resource Group | `string` | `"feed-release-resources"` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge schedule expression for checking releases | `string` | `"rate(1 hour)"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | <pre>{<br/>  "ManagedBy": "terraform",<br/>  "Project": "feed-release"<br/>}</pre> | no |
@@ -157,8 +147,9 @@ No modules.
 | <a name="output_comprehensive_resource_group_name"></a> [comprehensive\_resource\_group\_name](#output\_comprehensive\_resource\_group\_name) | Name of the comprehensive resource group (if created) |
 | <a name="output_config_bucket_arn"></a> [config\_bucket\_arn](#output\_config\_bucket\_arn) | ARN of the S3 bucket that holds the repositories config |
 | <a name="output_config_bucket_name"></a> [config\_bucket\_name](#output\_config\_bucket\_name) | Name of the S3 bucket that holds the repositories config |
-| <a name="output_eventbridge_rule_arns"></a> [eventbridge\_rule\_arns](#output\_eventbridge\_rule\_arns) | ARNs of the EventBridge rules |
-| <a name="output_eventbridge_rule_names"></a> [eventbridge\_rule\_names](#output\_eventbridge\_rule\_names) | Names of the EventBridge rules |
+| <a name="output_config_object_key"></a> [config\_object\_key](#output\_config\_object\_key) | Key of the repositories config (JSON) in the S3 bucket |
+| <a name="output_eventbridge_rule_arn"></a> [eventbridge\_rule\_arn](#output\_eventbridge\_rule\_arn) | ARN of the EventBridge rule |
+| <a name="output_eventbridge_rule_name"></a> [eventbridge\_rule\_name](#output\_eventbridge\_rule\_name) | Name of the EventBridge rule |
 | <a name="output_iam_role_arn"></a> [iam\_role\_arn](#output\_iam\_role\_arn) | ARN of the IAM role used by Lambda |
 | <a name="output_lambda_function_arn"></a> [lambda\_function\_arn](#output\_lambda\_function\_arn) | ARN of the Lambda function |
 | <a name="output_lambda_function_name"></a> [lambda\_function\_name](#output\_lambda\_function\_name) | Name of the Lambda function |
@@ -169,7 +160,7 @@ No modules.
 
 ## セキュリティ
 
-- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込みと、GitHubのトークンのSSMパラメータの読み取り（`ssm:GetParameter`）のみ
+- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込み、設定のS3オブジェクトの読み取り（`s3:GetObject`）、GitHubのトークンのSSMパラメータの読み取り（`ssm:GetParameter`）のみ
 - **GitHubのトークン**: 値はTerraformにもLambdaの環境変数にも渡さない。SSM Parameter Store（SecureString）に置き、Lambdaが実行時に取得する（`github_token_parameter_name`）
 - **VPC**: 不要なVPC設定は省略し、シンプルな構成を維持
 
@@ -189,9 +180,9 @@ aws logs filter-log-events --log-group-name /aws/lambda/feed-release \
 ### Lambda関数のテスト実行
 
 ```bash
-# 手動実行テスト（特定リポジトリ）
+# dry run（設定の読み込み・フィードの取得・dispatch するかの判断までを行い、dispatch はしない）
 aws lambda invoke --function-name feed-release \
-  --payload '{"monitored_owner":"anthropics","monitored_repo":"claude-code","target_owner":"my-org","target_repo":"my-app","event_type":"claude-code-release"}' \
+  --payload '{"dry_run": true}' --cli-binary-format raw-in-base64-out \
   response.json
 
 # レスポンス確認
@@ -212,4 +203,6 @@ aws resource-groups list-group-resources --group-name feed-release-resources
 ```bash
 export GITHUB_TOKEN_PARAMETER_NAME="/app/feed-release-invoke-workflow/gh-token-for-dispatch"
 export INTERVAL_SECOND="3600"
+export CONFIG_BUCKET="prod-feed-release-invoke-workflow"
+export CONFIG_KEY="repositories.json"
 ```
