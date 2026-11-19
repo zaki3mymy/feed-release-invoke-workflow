@@ -15,22 +15,16 @@ variable "interval_second" {
   default     = 3600
 }
 
-variable "repositories" {
-  description = "List of repositories to monitor for releases"
-  type = list(object({
-    name            = string
-    monitored_owner = string
-    monitored_repo  = string
-    target_owner    = string
-    target_repo     = string
-    event_type      = string
-  }))
-}
-
 variable "config_bucket_name" {
   description = "Name of the S3 bucket that holds the repositories config"
   type        = string
   default     = "prod-feed-release-invoke-workflow"
+}
+
+variable "config_object_key" {
+  description = "Key of the repositories config (JSON) in the S3 bucket"
+  type        = string
+  default     = "repositories.json"
 }
 
 variable "config_noncurrent_versions_to_keep" {
@@ -64,7 +58,7 @@ variable "schedule_expression" {
 variable "lambda_timeout" {
   description = "Lambda function timeout in seconds"
   type        = number
-  default     = 30
+  default     = 60
 }
 
 variable "lambda_memory_size" {

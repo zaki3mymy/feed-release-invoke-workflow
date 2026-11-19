@@ -59,9 +59,6 @@ jobs:
     - name: Create dist directory
       run: mkdir -p dist
 
-    - name: Write repositories config
-      run: echo '${{ secrets.REPOSITORIES_JSON }}' > terraform/environments/production/repositories.json
-
     - name: Terraform Init
       run: |
         cd terraform/environments/production
@@ -75,22 +72,20 @@ jobs:
         cd terraform/environments/production
         terraform apply -auto-approve -no-color
 
-    - name: Test Lambda deployment
-      env:
-        REPOSITORIES_JSON: ${{ secrets.REPOSITORIES_JSON }}
+    # dry run で Lambda を呼び、S3 の設定の読み込み・フィードの取得・dispatch するかの判断までを確かめる
+    # （dispatch はしない）。aws lambda invoke は関数がエラーでも成功で終わるので、FunctionError を見る
+    - name: Test Lambda deployment (dry run)
       run: |
-        echo "$REPOSITORIES_JSON" | jq -c '.[]' | while read -r repo; do
-          name=$(echo "$repo" | jq -r '.name')
-          echo "Testing Lambda with repository: $name"
-
-          aws lambda invoke \
-            --function-name feed-release \
-            --payload "$repo" \
-            --cli-binary-format raw-in-base64-out \
-            response.json
-
-          echo "Response for $name:"
-          cat response.json
-          rm -f response.json
-          echo ""
-        done
+        result=$(aws lambda invoke \
+          --function-name feed-release \
+          --payload '{"dry_run": true}' \
+          --cli-binary-format raw-in-base64-out \
+          --query FunctionError --output text \
+          response.json)
+        echo "Response:"
+        cat response.json
+        echo ""
+        if [ "$result" != "None" ]; then
+          echo "::error::Lambda returned an error: $result"
+          exit 1
+        fi

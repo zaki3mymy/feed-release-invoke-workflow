@@ -36,6 +36,9 @@ resource "aws_lambda_function" "feed_release" {
   environment {
     variables = {
       INTERVAL_SECOND = tostring(var.interval_second)
+      # 監視するリポジトリの設定。Lambda が実行のたびに読む
+      CONFIG_BUCKET = aws_s3_bucket.config.bucket
+      CONFIG_KEY    = var.config_object_key
       # トークンの値は渡さず、Lambda が実行時に SSM Parameter Store から取得する
       GITHUB_TOKEN_PARAMETER_NAME = var.github_token_parameter_name
     }
@@ -49,43 +52,29 @@ resource "aws_lambda_function" "feed_release" {
   tags = var.tags
 }
 
-# EventBridge rules for each monitored repository
-resource "aws_cloudwatch_event_rule" "release_monitor" {
-  for_each = { for repo in var.repositories : repo.name => repo }
-
-  name                = "${var.lambda_function_name}-${each.key}"
-  description         = "Monitor ${each.value.monitored_owner}/${each.value.monitored_repo} for new releases"
+# EventBridge rule that invokes the Lambda function on a schedule
+# 監視するリポジトリは Lambda が S3 の設定から読むので、ルールは 1 つにまとめる
+resource "aws_cloudwatch_event_rule" "schedule" {
+  name                = "${var.lambda_function_name}-schedule"
+  description         = "Check monitored repositories for new releases"
   schedule_expression = var.schedule_expression
 
   tags = var.tags
 }
 
-# EventBridge targets pointing to Lambda function with repository-specific payloads
 resource "aws_cloudwatch_event_target" "lambda_target" {
-  for_each = { for repo in var.repositories : repo.name => repo }
-
-  rule      = aws_cloudwatch_event_rule.release_monitor[each.key].name
-  target_id = "FeedRelease-${each.key}"
+  rule      = aws_cloudwatch_event_rule.schedule.name
+  target_id = "FeedRelease"
   arn       = aws_lambda_function.feed_release.arn
-
-  input = jsonencode({
-    monitored_owner = each.value.monitored_owner
-    monitored_repo  = each.value.monitored_repo
-    target_owner    = each.value.target_owner
-    target_repo     = each.value.target_repo
-    event_type      = each.value.event_type
-  })
 }
 
 # Lambda permissions for EventBridge to invoke
 resource "aws_lambda_permission" "allow_eventbridge" {
-  for_each = { for repo in var.repositories : repo.name => repo }
-
-  statement_id  = "AllowExecutionFromEventBridge-${each.key}"
+  statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.feed_release.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.release_monitor[each.key].arn
+  source_arn    = aws_cloudwatch_event_rule.schedule.arn
 }
 
 # S3 bucket for the repositories config (repositories.json)
@@ -182,6 +171,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect   = "Allow"
         Action   = "ssm:GetParameter"
         Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.github_token_parameter_name}"
+      },
+      {
+        # 監視するリポジトリの設定を読む
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.config.arn}/${var.config_object_key}"
       }
     ]
   })

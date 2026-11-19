@@ -162,9 +162,6 @@ jobs:
       with:
         terraform_version: "~1.9.0"
 
-    - name: Write repositories config
-      run: echo '${{ secrets.REPOSITORIES_JSON }}' > terraform/environments/production/repositories.json
-
     - name: Terraform Plan
       run: |
         cd terraform/environments/production
