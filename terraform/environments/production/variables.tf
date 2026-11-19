@@ -1,9 +1,3 @@
-variable "github_token" {
-  description = "GitHub API token for triggering workflow dispatch"
-  type        = string
-  sensitive   = true
-}
-
 variable "interval_second" {
   description = "Time window in seconds to consider a release as 'latest'"
   type        = number

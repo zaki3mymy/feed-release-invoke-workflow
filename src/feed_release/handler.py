@@ -8,7 +8,10 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import cache
 from typing import TypedDict
+
+import boto3
 
 logger = logging.getLogger()
 log_handler = logging.StreamHandler()
@@ -91,6 +94,18 @@ def is_latest_release(release: Release) -> bool:
     return (now - timedelta(seconds=interval)) < release.updated
 
 
+@cache
+def get_github_token() -> str:
+    """GitHub のトークンを SSM Parameter Store から取得する
+
+    同じ実行環境で呼ばれたときは、取得済みの値を使う。コールドスタートのときだけ取りに行く
+    """
+    parameter_name = os.environ["GITHUB_TOKEN_PARAMETER_NAME"]
+    ssm = boto3.client("ssm")
+    res = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
+    return res["Parameter"]["Value"]
+
+
 def invoke_workflow(repo: TargetRepo, token: str) -> None:
     """GItHub Actionsを実行する"""
     # https://docs.github.com/ja/rest/actions/workflow-runs?apiVersion=2022-11-28
@@ -134,7 +149,7 @@ def main(monitored_repo: MonitoredRepo, target_repo: TargetRepo) -> None:
         logger.info("No release.")
         return
     if is_latest_release(release):
-        token = os.environ["GITHUB_TOKEN"]
+        token = get_github_token()
         invoke_workflow(target_repo, token)
         logger.info(
             'Invoke workflow: "%s/%s(%s)"',

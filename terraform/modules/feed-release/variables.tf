@@ -1,7 +1,12 @@
-variable "github_token" {
-  description = "GitHub API token for triggering workflow dispatch"
+variable "github_token_parameter_name" {
+  description = "Name of the SSM parameter (SecureString) holding the GitHub API token for triggering workflow dispatch"
   type        = string
-  sensitive   = true
+  default     = "/app/feed-release-invoke-workflow/gh-token-for-dispatch"
+
+  validation {
+    condition     = substr(var.github_token_parameter_name, 0, 1) == "/"
+    error_message = "github_token_parameter_name must start with \"/\"."
+  }
 }
 
 variable "interval_second" {

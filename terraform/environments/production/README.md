@@ -38,9 +38,6 @@ aws s3api put-bucket-encryption \
 `terraform.tfvars`ファイルを作成し、以下の値を設定してください：
 
 ```hcl
-# GitHub API設定
-github_token = "ghp_xxxxxxxxxxxx"  # GitHub Personal Access Token
-
 # リリース判定設定
 interval_second = 3600  # 1時間以内のリリースを「最新」と判定
 
@@ -103,7 +100,13 @@ terraform apply
 1. [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) にアクセス
 2. 「Generate new token (classic)」で新しいトークンを作成
 3. 必要なスコープ: `repo` (Repository Dispatchに必要)
-4. 生成されたトークンをコピー
+4. 生成されたトークンを SSM Parameter Store に SecureString で登録する（Lambda が実行時に取得する）
+
+```bash
+aws ssm put-parameter --region ap-northeast-1 \
+  --name /app/feed-release-invoke-workflow/gh-token-for-dispatch --type SecureString \
+  --value "ghp_xxxxxxxxxxxx" --overwrite
+```
 
 ### repositories 変数の構造
 
@@ -218,7 +221,7 @@ schedule_expression = "cron(0 0 * * ? *)"  # UTC 00:00 = JST 09:00
    - IAMロールの権限を確認
 
 2. **GitHub API エラー**
-   - GitHub Tokenが正しいか確認
+   - SSM パラメータのGitHub Tokenが正しいか確認
    - トークンに`repo`スコープがあるか確認
    - リポジトリ名/オーナー名が正しいか確認
 
@@ -241,7 +244,7 @@ environment {
 
 ## セキュリティ考慮事項
 
-- GitHub Tokenは`sensitive = true`でマークされ、ログに出力されません
+- GitHub TokenはSSM Parameter Store（SecureString）に置き、Lambdaが実行時に取得します。Terraformの変数・state・Lambdaの環境変数には入りません
 - IAMロールは最小権限の原則に従い、必要な権限のみ付与
 - S3バックエンドは暗号化とバージョニングを有効化
 - CloudWatch Logsは14日間の保持期間を設定
@@ -279,7 +282,6 @@ environment {
 |------|-------------|------|---------|:--------:|
 | <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | CloudWatch log retention period in days | `number` | `14` | no |
 | <a name="input_create_comprehensive_resource_group"></a> [create\_comprehensive\_resource\_group](#input\_create\_comprehensive\_resource\_group) | Whether to create a comprehensive resource group that includes all AWS resources | `bool` | `false` | no |
-| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | GitHub API token for triggering workflow dispatch | `string` | n/a | yes |
 | <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |

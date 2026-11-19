@@ -36,7 +36,8 @@ resource "aws_lambda_function" "feed_release" {
   environment {
     variables = {
       INTERVAL_SECOND = tostring(var.interval_second)
-      GITHUB_TOKEN    = var.github_token
+      # トークンの値は渡さず、Lambda が実行時に SSM Parameter Store から取得する
+      GITHUB_TOKEN_PARAMETER_NAME = var.github_token_parameter_name
     }
   }
 
@@ -129,6 +130,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        # GitHub のトークンを読む。SecureString は AWS 管理キー（aws/ssm）で暗号化しているので kms:Decrypt は要らない
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.github_token_parameter_name}"
       }
     ]
   })
