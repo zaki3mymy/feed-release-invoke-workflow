@@ -3,6 +3,9 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   source_dir  = var.source_dir
   output_path = var.output_zip_path
+  # テストを動かしたあとにできる __pycache__ は zip に入れない
+  # （入れると CD と CI で zip のハッシュが変わり、plan に毎回 Lambda の差分が出る）
+  excludes = ["**/__pycache__/**"]
 }
 
 # Read repositories from JSON file with schema validation
@@ -24,6 +27,9 @@ module "feed_release" {
 
   # Repositories to monitor (from JSON file or variable)
   repositories = local.repositories
+
+  # Repositories config (S3)
+  config_bucket_name = var.config_bucket_name
 
   # Lambda configuration
   lambda_function_name    = var.lambda_function_name

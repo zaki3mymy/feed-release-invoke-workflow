@@ -88,6 +88,52 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.release_monitor[each.key].arn
 }
 
+# S3 bucket for the repositories config (repositories.json)
+# 監視するリポジトリの設定を置く。バージョニングを有効にして、前の設定に戻せるようにする
+resource "aws_s3_bucket" "config" {
+  bucket = var.config_bucket_name
+
+  tags = var.tags
+}
+
+resource "aws_s3_bucket_versioning" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# 古いバージョンが溜まらないよう、新しいものから config_noncurrent_versions_to_keep 個だけ残す
+resource "aws_s3_bucket_lifecycle_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    id     = "keep-recent-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      # 最新でなくなってから 1 日たったバージョンのうち、新しい方から指定した数を残して消す
+      noncurrent_days           = 1
+      newer_noncurrent_versions = var.config_noncurrent_versions_to_keep
+    }
+  }
+
+  # バージョニングを有効にしてからルールを設定する
+  depends_on = [aws_s3_bucket_versioning.config]
+}
+
+resource "aws_s3_bucket_public_access_block" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # IAM role for Lambda function
 resource "aws_iam_role" "lambda_role" {
   name = "${var.lambda_function_name}-role"
@@ -150,7 +196,8 @@ resource "aws_resourcegroups_group" "feed_release" {
       ResourceTypeFilters = [
         "AWS::Lambda::Function",
         "AWS::Events::Rule",
-        "AWS::Logs::LogGroup"
+        "AWS::Logs::LogGroup",
+        "AWS::S3::Bucket"
       ]
       TagFilters = [
         {

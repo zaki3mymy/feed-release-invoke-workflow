@@ -18,6 +18,16 @@ output "eventbridge_rule_arns" {
   value       = { for k, v in aws_cloudwatch_event_rule.release_monitor : k => v.arn }
 }
 
+output "config_bucket_name" {
+  description = "Name of the S3 bucket that holds the repositories config"
+  value       = aws_s3_bucket.config.bucket
+}
+
+output "config_bucket_arn" {
+  description = "ARN of the S3 bucket that holds the repositories config"
+  value       = aws_s3_bucket.config.arn
+}
+
 output "schedule_expression" {
   description = "EventBridge schedule expression used"
   value       = var.schedule_expression
