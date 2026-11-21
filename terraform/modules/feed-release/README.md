@@ -25,6 +25,9 @@ module "feed_release" {
   # 監視するリポジトリの設定を置く S3 バケット（設定の中身は feed-release CLI で管理する）
   config_bucket_name = "prod-feed-release-invoke-workflow"
 
+  # エントリーごとに、最後に dispatch できたリリースを記録する DynamoDB テーブル
+  state_table_name = "prod-feed-release-invoke-workflow-state"
+
   # オプション変数
   lambda_function_name = "feed-release"
   schedule_expression  = "rate(1 hour)"
@@ -104,6 +107,7 @@ No modules.
 | [aws_cloudwatch_event_rule.schedule](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.lambda_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_cloudwatch_log_group.lambda_log_group](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
+| [aws_dynamodb_table.state](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table) | resource |
 | [aws_iam_role.lambda_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.lambda_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy_attachment.lambda_basic_execution](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
@@ -136,6 +140,7 @@ No modules.
 | <a name="input_lambda_zip_path"></a> [lambda\_zip\_path](#input\_lambda\_zip\_path) | Path to the Lambda deployment zip file | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the AWS Resource Group | `string` | `"feed-release-resources"` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge schedule expression for checking releases | `string` | `"rate(1 hour)"` | no |
+| <a name="input_state_table_name"></a> [state\_table\_name](#input\_state\_table\_name) | Name of the DynamoDB table that records the last dispatched release for each entry | `string` | `"prod-feed-release-invoke-workflow-state"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | <pre>{<br/>  "ManagedBy": "terraform",<br/>  "Project": "feed-release"<br/>}</pre> | no |
 
 ## Outputs
@@ -156,11 +161,13 @@ No modules.
 | <a name="output_resource_group_arn"></a> [resource\_group\_arn](#output\_resource\_group\_arn) | ARN of the main resource group |
 | <a name="output_resource_group_name"></a> [resource\_group\_name](#output\_resource\_group\_name) | Name of the main resource group |
 | <a name="output_schedule_expression"></a> [schedule\_expression](#output\_schedule\_expression) | EventBridge schedule expression used |
+| <a name="output_state_table_arn"></a> [state\_table\_arn](#output\_state\_table\_arn) | ARN of the DynamoDB table that records the last dispatched release for each entry |
+| <a name="output_state_table_name"></a> [state\_table\_name](#output\_state\_table\_name) | Name of the DynamoDB table that records the last dispatched release for each entry |
 <!-- END_TF_DOCS -->
 
 ## セキュリティ
 
-- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込み、設定のS3オブジェクトの読み取り（`s3:GetObject`）、GitHubのトークンのSSMパラメータの読み取り（`ssm:GetParameter`）のみ
+- **IAMロール**: 最小権限の原則に従い、CloudWatch Logsの作成・書き込み、設定のS3オブジェクトの読み取り（`s3:GetObject`）、GitHubのトークンのSSMパラメータの読み取り（`ssm:GetParameter`）、dispatch の記録のテーブルの読み書き（`dynamodb:GetItem`・`dynamodb:PutItem`）のみ
 - **GitHubのトークン**: 値はTerraformにもLambdaの環境変数にも渡さない。SSM Parameter Store（SecureString）に置き、Lambdaが実行時に取得する（`github_token_parameter_name`）
 - **VPC**: 不要なVPC設定は省略し、シンプルな構成を維持
 
@@ -205,4 +212,5 @@ export GITHUB_TOKEN_PARAMETER_NAME="/app/feed-release-invoke-workflow/gh-token-f
 export INTERVAL_SECOND="3600"
 export CONFIG_BUCKET="prod-feed-release-invoke-workflow"
 export CONFIG_KEY="repositories.json"
+export STATE_TABLE_NAME="prod-feed-release-invoke-workflow-state"
 ```

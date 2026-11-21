@@ -33,6 +33,16 @@ output "config_bucket_arn" {
   value       = module.feed_release.config_bucket_arn
 }
 
+output "state_table_name" {
+  description = "Name of the DynamoDB table that records the last dispatched release for each entry"
+  value       = module.feed_release.state_table_name
+}
+
+output "state_table_arn" {
+  description = "ARN of the DynamoDB table that records the last dispatched release for each entry"
+  value       = module.feed_release.state_table_arn
+}
+
 output "schedule_expression" {
   description = "EventBridge schedule expression used"
   value       = module.feed_release.schedule_expression

@@ -102,6 +102,11 @@ Lambda が実行のたびに読むので、書き換えれば次の実行から�
 | `target_repo` | ワークフロー実行先のリポジトリ名 |
 | `event_type` | GitHub Actionsのイベントタイプ |
 
+### dispatch の記録
+
+エントリーごとに、最後に dispatch できたリリースの ID を DynamoDB のテーブル `prod-feed-release-invoke-workflow-state` に記録します（キーはエントリーの `name`）。
+テーブルは Terraform で作りますが、Lambda はまだ使っていません（記録と比べて判定するようにするのは #13 の次の段階です）。
+
 ## デプロイ後の確認
 
 ### リソースの確認
@@ -268,6 +273,7 @@ environment {
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the AWS Resource Group | `string` | `"feed-release-resources"` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge schedule expression for checking releases | `string` | `"rate(1 hour)"` | no |
 | <a name="input_source_dir"></a> [source\_dir](#input\_source\_dir) | Path to the source directory containing Lambda function code | `string` | `"../../../src/feed_release"` | no |
+| <a name="input_state_table_name"></a> [state\_table\_name](#input\_state\_table\_name) | Name of the DynamoDB table that records the last dispatched release for each entry | `string` | `"prod-feed-release-invoke-workflow-state"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | <pre>{<br/>  "Environment": "production",<br/>  "ManagedBy": "terraform",<br/>  "Project": "feed-release"<br/>}</pre> | no |
 
 ## Outputs
@@ -288,4 +294,6 @@ environment {
 | <a name="output_resource_group_arn"></a> [resource\_group\_arn](#output\_resource\_group\_arn) | ARN of the main resource group |
 | <a name="output_resource_group_name"></a> [resource\_group\_name](#output\_resource\_group\_name) | Name of the main resource group |
 | <a name="output_schedule_expression"></a> [schedule\_expression](#output\_schedule\_expression) | EventBridge schedule expression used |
+| <a name="output_state_table_arn"></a> [state\_table\_arn](#output\_state\_table\_arn) | ARN of the DynamoDB table that records the last dispatched release for each entry |
+| <a name="output_state_table_name"></a> [state\_table\_name](#output\_state\_table\_name) | Name of the DynamoDB table that records the last dispatched release for each entry |
 <!-- END_TF_DOCS -->

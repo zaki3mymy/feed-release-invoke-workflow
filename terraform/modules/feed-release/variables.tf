@@ -33,6 +33,12 @@ variable "config_noncurrent_versions_to_keep" {
   default     = 10
 }
 
+variable "state_table_name" {
+  description = "Name of the DynamoDB table that records the last dispatched release for each entry"
+  type        = string
+  default     = "prod-feed-release-invoke-workflow-state"
+}
+
 variable "lambda_function_name" {
   description = "Name of the Lambda function"
   type        = string
