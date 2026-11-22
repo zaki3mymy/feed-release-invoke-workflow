@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
@@ -83,6 +84,9 @@ class Release:
 
     id: str
     updated: datetime
+    # フィードのエントリーに <link rel="alternate"> が無ければ None
+    tag: str | None = None
+    url: str | None = None
 
 
 def fetch_releases(repo: MonitoredRepo) -> bytes:
@@ -94,25 +98,52 @@ def fetch_releases(repo: MonitoredRepo) -> bytes:
         return res.read()
 
 
+def _tag_from_url(url: str) -> str | None:
+    """リリースのページの URL からタグを取り出す
+
+    タグの "/" は URL では %2F になる(例: .../releases/tag/layer-python%2F0.22.0)ので、デコードする
+    """
+    _, sep, encoded = url.partition("/releases/tag/")
+    if not sep or not encoded:
+        return None
+    return urllib.parse.unquote(encoded)
+
+
 def parse_atom_feed(xml: bytes) -> Release | None:
-    """リリース情報をパースして最新のリリース情報を取得する"""
+    """リリース情報をパースして最新のリリース情報を取得する
+
+    最新のリリースはフィードの最初のエントリー。ID・更新日時と、<link rel="alternate"> から
+    リリースのページの URL とタグを取る
+    """
     ns = "http://www.w3.org/2005/Atom"
     parser = ET.XMLPullParser(["start", "end"])
     parser.feed(xml)
     is_entry = False
     release_id = None
     release_date = None
+    url = None
     for event, elem in parser.read_events():  # ty:ignore[invalid-assignment]
+        tag = elem.tag  # ty:ignore[possibly-missing-attribute]
         # `{}`のエスケープがややこしい
-        if event == "start" and elem.tag == f"{{{ns}}}entry":  # ty:ignore[possibly-missing-attribute]
+        if event == "start" and tag == f"{{{ns}}}entry":
             is_entry = True
-        elif is_entry and elem.tag == f"{{{ns}}}id":
-            release_id = elem.text
-        elif is_entry and elem.tag == f"{{{ns}}}updated":
-            release_date = elem.text
-
-        if release_id is not None and release_date is not None:
-            return Release(release_id, datetime.fromisoformat(release_date))
+        elif not is_entry or event != "end":
+            continue
+        elif tag == f"{{{ns}}}id":
+            release_id = elem.text  # ty:ignore[possibly-missing-attribute]
+        elif tag == f"{{{ns}}}updated":
+            release_date = elem.text  # ty:ignore[possibly-missing-attribute]
+        elif tag == f"{{{ns}}}link" and elem.get("rel", "alternate") == "alternate":  # ty:ignore[possibly-missing-attribute]
+            url = elem.get("href")  # ty:ignore[possibly-missing-attribute]
+        elif tag == f"{{{ns}}}entry":
+            if release_id is None or release_date is None:
+                return None
+            return Release(
+                release_id,
+                datetime.fromisoformat(release_date),
+                tag=_tag_from_url(url) if url else None,
+                url=url,
+            )
 
     return None
 
@@ -129,8 +160,12 @@ def get_github_token() -> str:
     return res["Parameter"]["Value"]
 
 
-def invoke_workflow(repo: TargetRepo, token: str) -> None:
-    """GItHub Actionsを実行する"""
+def invoke_workflow(repo: TargetRepo, token: str, release: Release) -> None:
+    """GItHub Actionsを実行する
+
+    client_payload にリリースのタグと URL を入れる。
+    起動された側では github.event.client_payload.tag・github.event.client_payload.url で読める
+    """
     # https://docs.github.com/ja/rest/actions/workflow-runs?apiVersion=2022-11-28
     owner = repo.owner
     name = repo.name
@@ -143,7 +178,7 @@ def invoke_workflow(repo: TargetRepo, token: str) -> None:
     }
     body = {
         "event_type": event_type,
-        "client_payload": {},
+        "client_payload": {"tag": release.tag, "url": release.url},
     }
     req = urllib.request.Request(
         url,
@@ -349,9 +384,10 @@ def _dispatch(plan: _Plan, state: DispatchState) -> list[str]:
     if not plan.to_dispatch:
         return []
     token = get_github_token()
+    releases = dict(plan.to_dispatch)
     results = _run_parallel(
-        [entry for entry, _ in plan.to_dispatch],
-        lambda e: invoke_workflow(e.target, token),
+        list(releases),
+        lambda e: invoke_workflow(e.target, token, releases[e]),
     )
     dispatched: list[str] = []
     for entry, release in plan.to_dispatch:

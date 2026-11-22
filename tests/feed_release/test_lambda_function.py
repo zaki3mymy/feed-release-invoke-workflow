@@ -30,6 +30,7 @@ NO_RELEASE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 RELEASE_ID = "tag:github.com,2008:Repository/1/0.2.0"
 OLD_RELEASE_ID = "tag:github.com,2008:Repository/1/0.1.0"
+RELEASE_URL = "https://github.com/m/repo/releases/tag/0.2.0"
 
 RELEASE_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -38,6 +39,7 @@ RELEASE_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
   <entry>
     <id>{RELEASE_ID}</id>
     <updated>2026-01-01T12:34:56+09:00</updated>
+    <link rel="alternate" type="text/html" href="{RELEASE_URL}"/>
     <title>0.2.0</title>
   </entry>
 </feed>
@@ -95,7 +97,12 @@ def mock_dispatch(repo: str, event_type: str = "release", status: int = 204) -> 
     return (
         pook.post(f"https://api.github.com/repos/{repo}/dispatches")
         .header("Authorization", f"Bearer {TOKEN}")
-        .json({"event_type": event_type, "client_payload": {}})
+        .json(
+            {
+                "event_type": event_type,
+                "client_payload": {"tag": "0.2.0", "url": RELEASE_URL},
+            },
+        )
         .times(1)
         .reply(status)
         .mock

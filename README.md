@@ -29,3 +29,29 @@ uv run feed-release remove otel-lambda-anime-schedules
 - バケットはバージョニングを有効にしているので、前の設定に戻せる（古いバージョンは 10 個まで残る）。
 - 追加したエントリーは、次の実行で今の最新リリースを記録するだけで、dispatch はしない。それより後に出たリリースから dispatch する。
   記録の詳しい動きは `terraform/environments/production/README.md` の「dispatch の記録」を参照。
+
+## 起動される側の workflow
+
+`repository_dispatch` の `event_type` に設定の `event_type` を、`client_payload` にリリースのタグと URL を入れて送る。
+
+```yaml
+on:
+  repository_dispatch:
+    types: [otel-lambda-release]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          # 例: layer-python/0.22.0
+          TAG: ${{ github.event.client_payload.tag }}
+          # 例: https://github.com/open-telemetry/opentelemetry-lambda/releases/tag/layer-python%2F0.22.0
+          URL: ${{ github.event.client_payload.url }}
+        run: echo "$TAG $URL"
+```
+
+- タグは監視先のリポジトリが決める値なので、`run` に `${{ }}` で直接埋め込まず、環境変数を通して使う（スクリプトインジェクションを防ぐ）。
+
+- タグの `/` は URL では `%2F` になるが、`tag` には元のタグ（`/` のまま）が入る。
+- まれに、dispatch はできたが記録の書き換えに失敗すると、同じリリースでもう一度 dispatch される。二重に動いても問題ないようにしておく。

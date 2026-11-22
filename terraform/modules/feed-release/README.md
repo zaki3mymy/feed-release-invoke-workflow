@@ -8,7 +8,7 @@
 - **複数リポジトリ監視**: 監視するリポジトリの設定をS3のJSONに置き、Lambdaが実行のたびに読む。設定を書き換えれば次の実行から反映される（Terraformの実行は不要）
 - **並列処理**: リポジトリごとのフィード取得とdispatchをスレッドで並列に行う。同じリポジトリを監視するエントリーはフィード取得を1回にまとめる
 - **取りこぼさない判定**: エントリーごとに、最後にdispatchできたリリースのIDをDynamoDBに記録し、最新のリリースのIDが記録と違えばdispatchする。記録はdispatchに成功したときだけ書き換えるので、失敗したエントリーは次の実行でやり直される
-- **GitHub API統合**: Repository Dispatch APIでワークフローをトリガー
+- **GitHub API統合**: Repository Dispatch APIでワークフローをトリガー。`client_payload` にリリースのタグ（`tag`）とURL（`url`）を入れる
 - **セキュリティ考慮**: 最小権限IAMロールとsensitive変数保護
 - **リソース管理**: AWS Resource Groupsによる一元管理
 - **ログ記録**: CloudWatch Logsで実行ログを保存
