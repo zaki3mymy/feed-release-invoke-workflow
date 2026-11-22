@@ -29,7 +29,6 @@ cli = [
 dev = [
     # Lambda は実行環境に入っている boto3 を使う（zip には入れない）。テストと型チェックのために入れる
     "boto3>=1.44.6",
-    "freezegun>=1.5.5",
     "pook>=2.1.4",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",

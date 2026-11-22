@@ -12,9 +12,6 @@ data "archive_file" "lambda_zip" {
 module "feed_release" {
   source = "../../modules/feed-release"
 
-  # GitHub configuration
-  interval_second = var.interval_second
-
   # Repositories config (S3)
   config_bucket_name = var.config_bucket_name
 

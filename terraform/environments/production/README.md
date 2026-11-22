@@ -38,9 +38,6 @@ aws s3api put-bucket-encryption \
 `terraform.tfvars`ファイルを作成し、以下の値を設定してください：
 
 ```hcl
-# リリース判定設定
-interval_second = 3600  # 1時間以内のリリースを「最新」と判定
-
 # Lambda設定
 lambda_function_name = "feed-release"
 
@@ -105,7 +102,24 @@ Lambda が実行のたびに読むので、書き換えれば次の実行から�
 ### dispatch の記録
 
 エントリーごとに、最後に dispatch できたリリースの ID を DynamoDB のテーブル `prod-feed-release-invoke-workflow-state` に記録します（キーはエントリーの `name`）。
-テーブルは Terraform で作りますが、Lambda はまだ使っていません（記録と比べて判定するようにするのは #13 の次の段階です）。
+Lambda は最新のリリースの ID を記録と比べて、次のように判定します。
+
+| 記録 | 動き |
+|------|------|
+| 無い（追加した直後のエントリー） | 今の最新のリリースを記録するだけで、dispatch はしない。リリースが 1 つも無ければ、リリースが無いこと（空文字）を記録する |
+| 最新のリリースと違う | dispatch し、成功したときだけ記録を最新のリリースに書き換える |
+| 最新のリリースと同じ | 何もしない |
+
+- dispatch に失敗したエントリーは記録が変わらないので、次の実行でやり直されます
+- dispatch はできたが記録の書き換えに失敗した場合は、次の実行でもう一度 dispatch されます
+- dry run（`{"dry_run": true}`）では記録を読むだけで、書き込みません
+- `feed-release remove` でエントリーを消しても記録は残ります。同じ `name` で追加し直すと、前の記録と比べます
+- 記録を消したエントリーは、追加した直後と同じ扱い（記録するだけ）になります
+
+```bash
+# 記録の一覧
+aws dynamodb scan --table-name prod-feed-release-invoke-workflow-state
+```
 
 ## デプロイ後の確認
 
@@ -265,7 +279,6 @@ environment {
 | <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | CloudWatch log retention period in days | `number` | `14` | no |
 | <a name="input_config_bucket_name"></a> [config\_bucket\_name](#input\_config\_bucket\_name) | Name of the S3 bucket that holds the repositories config | `string` | `"prod-feed-release-invoke-workflow"` | no |
 | <a name="input_create_comprehensive_resource_group"></a> [create\_comprehensive\_resource\_group](#input\_create\_comprehensive\_resource\_group) | Whether to create a comprehensive resource group that includes all AWS resources | `bool` | `false` | no |
-| <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
 | <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Lambda function timeout in seconds | `number` | `60` | no |

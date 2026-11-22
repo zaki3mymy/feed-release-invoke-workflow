@@ -27,3 +27,5 @@ uv run feed-release remove otel-lambda-anime-schedules
 - `--profile` で AWS のプロファイル、`--bucket`（環境変数 `FEED_RELEASE_BUCKET`）でバケットを指定できる。
 - 書き込みは、読んだときの ETag を条件にする（`If-Match`）。同時に書き換えられていたら、エラーにして書き込まない。
 - バケットはバージョニングを有効にしているので、前の設定に戻せる（古いバージョンは 10 個まで残る）。
+- 追加したエントリーは、次の実行で今の最新リリースを記録するだけで、dispatch はしない。それより後に出たリリースから dispatch する。
+  記録の詳しい動きは `terraform/environments/production/README.md` の「dispatch の記録」を参照。
