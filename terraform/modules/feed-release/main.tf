@@ -41,6 +41,8 @@ resource "aws_lambda_function" "feed_release" {
       CONFIG_KEY    = var.config_object_key
       # トークンの値は渡さず、Lambda が実行時に SSM Parameter Store から取得する
       GITHUB_TOKEN_PARAMETER_NAME = var.github_token_parameter_name
+      # エントリーごとに、最後に dispatch できたリリースを記録するテーブル
+      STATE_TABLE_NAME = aws_dynamodb_table.state.name
     }
   }
 
@@ -123,6 +125,23 @@ resource "aws_s3_bucket_public_access_block" "config" {
   restrict_public_buckets = true
 }
 
+# DynamoDB table for the dispatch state
+# エントリーごとに、最後に dispatch できたリリースの ID を記録する（キーはエントリーの name）。
+# 時間ではなくこの記録と比べて判定するので、dispatch に失敗したエントリーは次の実行でやり直される。
+# 設定（repositories.json）とは別に置く（CLI が ETag を条件に設定を書き込むときと衝突させない）
+resource "aws_dynamodb_table" "state" {
+  name         = var.state_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "name"
+
+  attribute {
+    name = "name"
+    type = "S"
+  }
+
+  tags = var.tags
+}
+
 # IAM role for Lambda function
 resource "aws_iam_role" "lambda_role" {
   name = "${var.lambda_function_name}-role"
@@ -177,6 +196,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect   = "Allow"
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.config.arn}/${var.config_object_key}"
+      },
+      {
+        # エントリーごとの記録を読み、dispatch に成功したら書き換える
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+        Resource = aws_dynamodb_table.state.arn
       }
     ]
   })
@@ -192,7 +217,8 @@ resource "aws_resourcegroups_group" "feed_release" {
         "AWS::Lambda::Function",
         "AWS::Events::Rule",
         "AWS::Logs::LogGroup",
-        "AWS::S3::Bucket"
+        "AWS::S3::Bucket",
+        "AWS::DynamoDB::Table"
       ]
       TagFilters = [
         {

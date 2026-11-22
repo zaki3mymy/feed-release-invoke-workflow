@@ -33,6 +33,16 @@ output "config_bucket_arn" {
   value       = aws_s3_bucket.config.arn
 }
 
+output "state_table_name" {
+  description = "Name of the DynamoDB table that records the last dispatched release for each entry"
+  value       = aws_dynamodb_table.state.name
+}
+
+output "state_table_arn" {
+  description = "ARN of the DynamoDB table that records the last dispatched release for each entry"
+  value       = aws_dynamodb_table.state.arn
+}
+
 output "schedule_expression" {
   description = "EventBridge schedule expression used"
   value       = var.schedule_expression

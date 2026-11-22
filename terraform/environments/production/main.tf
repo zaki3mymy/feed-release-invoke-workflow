@@ -18,6 +18,9 @@ module "feed_release" {
   # Repositories config (S3)
   config_bucket_name = var.config_bucket_name
 
+  # Dispatch state (DynamoDB)
+  state_table_name = var.state_table_name
+
   # Lambda configuration
   lambda_function_name    = var.lambda_function_name
   lambda_zip_path         = data.archive_file.lambda_zip.output_path

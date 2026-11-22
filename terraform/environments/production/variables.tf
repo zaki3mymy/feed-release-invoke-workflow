@@ -10,6 +10,12 @@ variable "config_bucket_name" {
   default     = "prod-feed-release-invoke-workflow"
 }
 
+variable "state_table_name" {
+  description = "Name of the DynamoDB table that records the last dispatched release for each entry"
+  type        = string
+  default     = "prod-feed-release-invoke-workflow-state"
+}
+
 variable "lambda_function_name" {
   description = "Name of the Lambda function"
   type        = string
