@@ -9,12 +9,6 @@ variable "github_token_parameter_name" {
   }
 }
 
-variable "interval_second" {
-  description = "Time window in seconds to consider a release as 'latest'"
-  type        = number
-  default     = 3600
-}
-
 variable "config_bucket_name" {
   description = "Name of the S3 bucket that holds the repositories config"
   type        = string

@@ -7,6 +7,7 @@
 - **自動スケジュール実行**: EventBridgeで1時間ごとに実行（ルールは1つ）
 - **複数リポジトリ監視**: 監視するリポジトリの設定をS3のJSONに置き、Lambdaが実行のたびに読む。設定を書き換えれば次の実行から反映される（Terraformの実行は不要）
 - **並列処理**: リポジトリごとのフィード取得とdispatchをスレッドで並列に行う。同じリポジトリを監視するエントリーはフィード取得を1回にまとめる
+- **取りこぼさない判定**: エントリーごとに、最後にdispatchできたリリースのIDをDynamoDBに記録し、最新のリリースのIDが記録と違えばdispatchする。記録はdispatchに成功したときだけ書き換えるので、失敗したエントリーは次の実行でやり直される
 - **GitHub API統合**: Repository Dispatch APIでワークフローをトリガー
 - **セキュリティ考慮**: 最小権限IAMロールとsensitive変数保護
 - **リソース管理**: AWS Resource Groupsによる一元管理
@@ -31,7 +32,6 @@ module "feed_release" {
   # オプション変数
   lambda_function_name = "feed-release"
   schedule_expression  = "rate(1 hour)"
-  interval_second      = 3600
   lambda_timeout       = 60
   lambda_memory_size   = 128
 
@@ -50,6 +50,7 @@ sequenceDiagram
     participant EB as EventBridge
     participant LF as Lambda Function
     participant S3 as S3 (repositories.json)
+    participant DB as DynamoDB (dispatch の記録)
     participant GH as GitHub Atom Feed
     participant GA as GitHub Actions
     participant CW as CloudWatch Logs
@@ -59,7 +60,7 @@ sequenceDiagram
     EB->>+LF: トリガー実行
 
     LF->>+IAM: 権限確認
-    IAM-->>-LF: CloudWatch Logs・S3・SSM権限付与
+    IAM-->>-LF: CloudWatch Logs・S3・SSM・DynamoDB権限付与
 
     LF->>+S3: 監視するリポジトリの設定を取得
     S3-->>-LF: エントリーの一覧
@@ -69,13 +70,18 @@ sequenceDiagram
     Note over GH: /releases.atom
     GH-->>-LF: リリース情報レスポンス
 
-    alt 新しいリリースが存在（INTERVAL_SECOND以内）
-        Note over LF: そのリポジトリを監視する全エントリーに
+    Note over LF: エントリーごとに
+    LF->>+DB: 最後に dispatch したリリースの ID を取得
+    DB-->>-LF: 記録（無ければなし）
+
+    alt 記録が無い
+        LF->>DB: 今の最新のリリースを記録（dispatch はしない）
+    else 記録と最新のリリースが違う
         LF->>+GA: Repository Dispatch API
         Note over GA: ワークフロートリガー
         GA-->>-LF: 実行完了レスポンス
-        LF->>CW: 成功ログ出力
-    else 新しいリリースなし
+        LF->>DB: 成功したときだけ、記録を最新のリリースに書き換える
+    else 記録と同じ
         LF->>CW: スキップログ出力
     end
 
@@ -132,7 +138,6 @@ No modules.
 | <a name="input_config_object_key"></a> [config\_object\_key](#input\_config\_object\_key) | Key of the repositories config (JSON) in the S3 bucket | `string` | `"repositories.json"` | no |
 | <a name="input_create_comprehensive_resource_group"></a> [create\_comprehensive\_resource\_group](#input\_create\_comprehensive\_resource\_group) | Whether to create a comprehensive resource group that includes all AWS resources | `bool` | `false` | no |
 | <a name="input_github_token_parameter_name"></a> [github\_token\_parameter\_name](#input\_github\_token\_parameter\_name) | Name of the SSM parameter (SecureString) holding the GitHub API token for triggering workflow dispatch | `string` | `"/app/feed-release-invoke-workflow/gh-token-for-dispatch"` | no |
-| <a name="input_interval_second"></a> [interval\_second](#input\_interval\_second) | Time window in seconds to consider a release as 'latest' | `number` | `3600` | no |
 | <a name="input_lambda_function_name"></a> [lambda\_function\_name](#input\_lambda\_function\_name) | Name of the Lambda function | `string` | `"feed-release"` | no |
 | <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Lambda function memory size in MB | `number` | `128` | no |
 | <a name="input_lambda_source_code_hash"></a> [lambda\_source\_code\_hash](#input\_lambda\_source\_code\_hash) | Base64 encoded hash of the Lambda zip file | `string` | n/a | yes |
@@ -209,7 +214,6 @@ aws resource-groups list-group-resources --group-name feed-release-resources
 
 ```bash
 export GITHUB_TOKEN_PARAMETER_NAME="/app/feed-release-invoke-workflow/gh-token-for-dispatch"
-export INTERVAL_SECOND="3600"
 export CONFIG_BUCKET="prod-feed-release-invoke-workflow"
 export CONFIG_KEY="repositories.json"
 export STATE_TABLE_NAME="prod-feed-release-invoke-workflow-state"

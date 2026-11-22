@@ -2,6 +2,10 @@
 
 監視するリポジトリの設定は S3 の JSON(環境変数 CONFIG_BUCKET・CONFIG_KEY)に置き、
 実行のたびに読む。同じリポジトリを監視するエントリーは、フィードの取得を 1 回にまとめる。
+
+エントリーごとに、最後に dispatch できたリリースの ID を DynamoDB(環境変数 STATE_TABLE_NAME)に
+記録し、最新のリリースの ID が記録と違えば dispatch する。記録は dispatch に成功したときだけ
+書き換えるので、失敗したエントリーは次の実行でやり直される。
 """
 
 import json
@@ -13,9 +17,9 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from functools import cache
-from typing import cast
+from typing import Protocol, cast
 
 import boto3
 from botocore.exceptions import ClientError
@@ -111,13 +115,6 @@ def parse_atom_feed(xml: bytes) -> Release | None:
             return Release(release_id, datetime.fromisoformat(release_date))
 
     return None
-
-
-def is_latest_release(release: Release) -> bool:
-    """最新のリリースであるかどうかを判定する"""
-    interval = int(os.environ["INTERVAL_SECOND"])
-    now = datetime.now(tz=UTC)
-    return (now - timedelta(seconds=interval)) < release.updated
 
 
 @cache
@@ -217,18 +214,61 @@ def load_entries(bucket: str, key: str) -> list[Entry]:
     return parse_entries(res["Body"].read(), location)
 
 
-def check_latest_release(repo: MonitoredRepo) -> bool:
-    """リポジトリに新しいリリースがあるかを調べる"""
+# リリースが 1 つも無いリポジトリで、記録に入れる値。
+# 記録が無いエントリーは「記録だけ」にするので、リリースが無いことも記録しておかないと、
+# 最初のリリースが出たときに dispatch されない
+NO_RELEASE = ""
+
+
+class DispatchState(Protocol):
+    """エントリーごとに、最後に dispatch できたリリースの ID を覚えておく場所"""
+
+    def get(self, name: str) -> str | None:
+        """記録しているリリースの ID を返す。記録が無ければ None"""
+        ...
+
+    def put(self, name: str, release_id: str) -> None:
+        """リリースの ID を記録する"""
+        ...
+
+
+class DynamoDBDispatchState:
+    """DynamoDB のテーブルに記録する。キーはエントリーの name"""
+
+    def __init__(self, table_name: str) -> None:  # noqa: D107
+        self.table_name = table_name
+        self.client = boto3.client("dynamodb")
+
+    def get(self, name: str) -> str | None:  # noqa: D102
+        res = self.client.get_item(
+            TableName=self.table_name,
+            Key={"name": {"S": name}},
+            ConsistentRead=True,
+        )
+        item = res.get("Item")
+        if item is None:
+            return None
+        return item["release_id"]["S"]
+
+    def put(self, name: str, release_id: str) -> None:  # noqa: D102
+        self.client.put_item(
+            TableName=self.table_name,
+            Item={
+                "name": {"S": name},
+                "release_id": {"S": release_id},
+                "updated_at": {"S": datetime.now(tz=UTC).isoformat()},
+            },
+        )
+
+
+def fetch_latest_release(repo: MonitoredRepo) -> Release | None:
+    """リポジトリの最新のリリースを取得する。リリースが無ければ None"""
     logger.info('fetch release: "%s/%s"', repo.owner, repo.name)
     release = parse_atom_feed(fetch_releases(repo))
     logger.info(release)
     if release is None:
         logger.info('No release: "%s/%s"', repo.owner, repo.name)
-        return False
-    latest = is_latest_release(release)
-    if not latest:
-        logger.info('No latest release: "%s/%s"', repo.owner, repo.name)
-    return latest
+    return release
 
 
 def _run_parallel[K, V](items: list[K], func: Callable[[K], V]) -> dict[K, V | Exception]:
@@ -245,44 +285,112 @@ def _run_parallel[K, V](items: list[K], func: Callable[[K], V]) -> dict[K, V | E
     return results
 
 
-def main(entries: list[Entry], *, dry_run: bool = False) -> dict[str, object]:
-    """全エントリーのリリースを調べ、新しいリリースがあれば GitHub Actions を実行する
+def _call[V](func: Callable[[], V]) -> V | Exception:
+    """引数なしの関数を呼び、結果か例外を返す"""
+    try:
+        return func()
+    except Exception as e:  # noqa: BLE001  1 件が失敗しても残りは続ける
+        return e
 
-    1 件が失敗しても残りは続け、最後に失敗をまとめて FeedReleaseError にする。
-    dry_run のときは dispatch せず、dispatch するはずだったエントリーを返す。
+
+@dataclass
+class _Plan:
+    """記録と最新のリリースを比べた結果"""
+
+    to_dispatch: list[tuple[Entry, Release]]
+    to_initialize: list[tuple[Entry, str]]
+    errors: list[str]
+
+
+def _plan(groups: dict[MonitoredRepo, list[Entry]], state: DispatchState) -> _Plan:
+    """監視するリポジトリごとに最新のリリースを取り、エントリーごとに記録と比べる
+
+    - 記録が無い: 今の最新のリリース(リリースが無ければ NO_RELEASE)を記録するだけ
+    - 記録と最新のリリースが違う: dispatch する
+    - 記録と同じ、またはリリースが無い: 何もしない
+    """
+    plan = _Plan([], [], [])
+    for repo, fetched in _run_parallel(list(groups), fetch_latest_release).items():
+        if isinstance(fetched, Exception):
+            logger.error('Failed to check release: "%s/%s": %s', repo.owner, repo.name, fetched)
+            plan.errors.append(f"{repo.owner}/{repo.name}: {fetched}")
+            continue
+        for entry in groups[repo]:
+            recorded = _call(lambda e=entry: state.get(e.name))
+            if isinstance(recorded, Exception):
+                logger.error('Failed to read state: "%s": %s', entry.name, recorded)
+                plan.errors.append(f"{entry.name}: {recorded}")
+            elif recorded is None:
+                latest_id = fetched.id if fetched is not None else NO_RELEASE
+                plan.to_initialize.append((entry, latest_id))
+            elif fetched is not None and recorded != fetched.id:
+                plan.to_dispatch.append((entry, fetched))
+    plan.to_dispatch.sort(key=lambda x: x[0].name)
+    plan.to_initialize.sort(key=lambda x: x[0].name)
+    return plan
+
+
+def _initialize(plan: _Plan, state: DispatchState) -> list[str]:
+    """記録が無いエントリーに、今の最新のリリースを記録する。記録できたエントリーを返す"""
+    initialized: list[str] = []
+    for entry, release_id in plan.to_initialize:
+        result = _call(lambda e=entry, r=release_id: state.put(e.name, r))
+        if isinstance(result, Exception):
+            logger.error('Failed to write state: "%s": %s', entry.name, result)
+            plan.errors.append(f"{entry.name}: {result}")
+        else:
+            logger.info('Initialize state: "%s" (%s)', entry.name, release_id)
+            initialized.append(entry.name)
+    return initialized
+
+
+def _dispatch(plan: _Plan, state: DispatchState) -> list[str]:
+    """GitHub Actions を実行し、成功したら記録を書き換える。dispatch できたエントリーを返す"""
+    if not plan.to_dispatch:
+        return []
+    token = get_github_token()
+    results = _run_parallel(
+        [entry for entry, _ in plan.to_dispatch],
+        lambda e: invoke_workflow(e.target, token),
+    )
+    dispatched: list[str] = []
+    for entry, release in plan.to_dispatch:
+        result = results[entry]
+        target = entry.target
+        if isinstance(result, Exception):
+            logger.error('Failed to invoke workflow: "%s": %s', entry.name, result)
+            plan.errors.append(f"{entry.name}: {result}")
+            continue
+        logger.info('Invoke workflow: "%s/%s(%s)"', target.owner, target.name, target.event_type)
+        dispatched.append(entry.name)
+        recorded = _call(lambda e=entry, r=release: state.put(e.name, r.id))
+        if isinstance(recorded, Exception):
+            # dispatch はできたが記録できなかったので、次の実行でもう一度 dispatch される
+            logger.error('Failed to write state after dispatch: "%s": %s', entry.name, recorded)
+            plan.errors.append(f"{entry.name}: dispatch したが記録できませんでした: {recorded}")
+    return dispatched
+
+
+def main(
+    entries: list[Entry],
+    state: DispatchState,
+    *,
+    dry_run: bool = False,
+) -> dict[str, object]:
+    """全エントリーのリリースを調べ、記録と違うリリースがあれば GitHub Actions を実行する
+
+    - 記録が無いエントリーは、今の最新のリリースを記録するだけで dispatch しない
+    - 記録は dispatch に成功したときだけ書き換える。失敗したエントリーは次の実行でやり直される
+    - 1 件が失敗しても残りは続け、最後に失敗をまとめて FeedReleaseError にする
+
+    dry_run のときは記録を読むだけで、dispatch も記録の書き込みもしない。
+    dispatch するはずだったエントリーと、記録するはずだったエントリーを返す。
     """
     groups: dict[MonitoredRepo, list[Entry]] = {}
     for entry in entries:
         groups.setdefault(entry.monitored, []).append(entry)
 
-    errors: list[str] = []
-    to_dispatch: list[Entry] = []
-    for repo, checked in _run_parallel(list(groups), check_latest_release).items():
-        if isinstance(checked, Exception):
-            logger.error('Failed to check release: "%s/%s": %s', repo.owner, repo.name, checked)
-            errors.append(f"{repo.owner}/{repo.name}: {checked}")
-        elif checked:
-            to_dispatch.extend(groups[repo])
-    to_dispatch.sort(key=lambda e: e.name)
-
-    dispatched: list[str] = []
-    if to_dispatch and not dry_run:
-        token = get_github_token()
-        results = _run_parallel(to_dispatch, lambda e: invoke_workflow(e.target, token))
-        for entry in to_dispatch:
-            result = results[entry]
-            target = entry.target
-            if isinstance(result, Exception):
-                logger.error('Failed to invoke workflow: "%s": %s', entry.name, result)
-                errors.append(f"{entry.name}: {result}")
-            else:
-                logger.info(
-                    'Invoke workflow: "%s/%s(%s)"',
-                    target.owner,
-                    target.name,
-                    target.event_type,
-                )
-                dispatched.append(entry.name)
+    plan = _plan(groups, state)
 
     summary: dict[str, object] = {
         "dry_run": dry_run,
@@ -290,13 +398,15 @@ def main(entries: list[Entry], *, dry_run: bool = False) -> dict[str, object]:
         "monitored_repos": len(groups),
     }
     if dry_run:
-        summary["would_dispatch"] = [e.name for e in to_dispatch]
+        summary["would_dispatch"] = [e.name for e, _ in plan.to_dispatch]
+        summary["would_initialize"] = [e.name for e, _ in plan.to_initialize]
     else:
-        summary["dispatched"] = dispatched
+        summary["initialized"] = _initialize(plan, state)
+        summary["dispatched"] = _dispatch(plan, state)
     logger.info(json.dumps(summary, ensure_ascii=False))
 
-    if errors:
-        msg = f"{len(errors)} 件の処理に失敗しました: " + "; ".join(sorted(errors))
+    if plan.errors:
+        msg = f"{len(plan.errors)} 件の処理に失敗しました: " + "; ".join(sorted(plan.errors))
         raise FeedReleaseError(msg)
     return summary
 
@@ -305,9 +415,11 @@ def lambda_function(event: Mapping[str, object] | None, _) -> dict[str, object]:
     """Lambda関数のエントリーポイント
 
     EventBridge のスケジュールからは決まった形のイベントが来るが、使うのは dry_run だけ。
-    {"dry_run": true} のときは、設定の読み込み・フィードの取得・dispatch するかの判断までを行う
+    {"dry_run": true} のときは、設定と記録の読み込み・フィードの取得・dispatch するかの判断まで
+    を行う
     """
     bucket = os.environ["CONFIG_BUCKET"]
     key = os.environ["CONFIG_KEY"]
+    state = DynamoDBDispatchState(os.environ["STATE_TABLE_NAME"])
     dry_run = isinstance(event, dict) and event.get("dry_run") is True
-    return main(load_entries(bucket, key), dry_run=dry_run)
+    return main(load_entries(bucket, key), state, dry_run=dry_run)

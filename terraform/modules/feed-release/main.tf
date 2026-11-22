@@ -35,7 +35,6 @@ resource "aws_lambda_function" "feed_release" {
 
   environment {
     variables = {
-      INTERVAL_SECOND = tostring(var.interval_second)
       # 監視するリポジトリの設定。Lambda が実行のたびに読む
       CONFIG_BUCKET = aws_s3_bucket.config.bucket
       CONFIG_KEY    = var.config_object_key
